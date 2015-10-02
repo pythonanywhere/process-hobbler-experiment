@@ -2,15 +2,12 @@
 import asyncio
 import os
 import signal
-
-# TARPIT_CGROUP_DIR = '/mnt/cgroups/cpu.shares/user_types/tarpit'
-TARPIT_CGROUP_DIR = '/sys/fs/cgroup/cpu/tarpit'
-
+import sys
 
 
 @asyncio.coroutine
-def get_pids():
-    with open(os.path.join(TARPIT_CGROUP_DIR, 'tasks')) as f:
+def get_pids(tarpit_cgroup_dir):
+    with open(os.path.join(tarpit_cgroup_dir, 'tasks')) as f:
         return f.readlines()
 
 
@@ -31,9 +28,9 @@ def hobble_process(pid):
 
 
 @asyncio.coroutine
-def hobble_current_processes(loop, already_hobbled):
+def hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir):
     print('getting latest process list')
-    pids = yield from get_pids()
+    pids = yield from get_pids(tarpit_cgroup_dir)
     for pid in pids:
         if pid in already_hobbled:
             continue
@@ -45,23 +42,27 @@ def hobble_current_processes(loop, already_hobbled):
 
 
 @asyncio.coroutine
-def hobble_processes_forever(loop):
+def hobble_processes_forever(loop, tarpit_cgroup_dir):
     already_hobbled = set()
     while True:
         print('hobbling current processes')
-        yield from hobble_current_processes(loop, already_hobbled)
+        yield from hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir)
         yield from asyncio.sleep(2)
 
 
-def main():
+def main(tarpit_cgroup_dir):
     loop = asyncio.get_event_loop()
     loop.create_task(
-        hobble_processes_forever(loop)
+        hobble_processes_forever(loop, tarpit_cgroup_dir)
     )
     loop.run_forever()
     loop.close()
 
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[-1].startswith('/'):
+        tarpit = sys.argv[-1]
+    else:
+        tarpit = '/mnt/cgroups/cpu/user_types/tarpit'
+    main(tarpit)
 
