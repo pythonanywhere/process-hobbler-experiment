@@ -1,6 +1,16 @@
 #!/usr/bin/python3.4
+"""Mean tarpit, a process hobbler
+
+Usage:
+  mean_tarpit.py <tarpit_cgroup_dir> [--testing]
+
+Options:
+  -h --help             Show this screen.
+  --testing             Testing mode (faster loop)
+"""
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from docopt import docopt
 import os
 import psutil
 import signal
@@ -28,7 +38,7 @@ def hobble_process(pid, loop):
             )
             for child in children:
                 os.kill(child.pid, signal.SIGSTOP)
-            yield from asyncio.sleep(0.2)
+            yield from asyncio.sleep(0.25)
             for child in reversed(children):
                 os.kill(child.pid, signal.SIGCONT)
             os.kill(pid, signal.SIGCONT)
@@ -54,32 +64,31 @@ def hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir):
 
 
 @asyncio.coroutine
-def hobble_processes_forever(loop, tarpit_cgroup_dir):
+def hobble_processes_forever(loop, tarpit_cgroup_dir, tarpit_update_pause):
     already_hobbled = set()
     while True:
         print('hobbling...', flush=True)
         yield from hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir)
-        yield from asyncio.sleep(2)
+        yield from asyncio.sleep(tarpit_update_pause)
 
 
-def main(tarpit_cgroup_dir):
+def main(tarpit_cgroup_dir, tarpit_update_pause):
     print('Starting mean tarpit')
     loop = asyncio.get_event_loop()
     if not hasattr(loop, 'create_task'):  # was added in 3.4.2
         loop.create_task = asyncio.async
     loop.threadpool = ThreadPoolExecutor(max_workers=20)
     loop.create_task(
-        hobble_processes_forever(loop, tarpit_cgroup_dir)
+        hobble_processes_forever(loop, tarpit_cgroup_dir, tarpit_update_pause)
     )
     loop.run_forever()
     loop.close()
 
 
 if __name__ == '__main__':
-    if sys.argv[-1].startswith('/'):
-        tarpit = sys.argv[-1]
-    else:
-        tarpit = '/mnt/cgroups/cpu/user_types/tarpit'
+    args = docopt(__doc__)
+    tarpit = args['<tarpit_cgroup_dir>']
     assert os.path.exists(os.path.join(tarpit, 'tasks'))
-    main(tarpit)
+    pause = 2 if not args.get('--testing') else 0.3
+    main(tarpit, pause)
 

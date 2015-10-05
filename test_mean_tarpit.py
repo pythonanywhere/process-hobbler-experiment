@@ -18,9 +18,9 @@ def fake_tarpit_dir():
 
 
 @pytest.yield_fixture
-def start_main_in_subprocess(fake_tarpit_dir):
+def mean_tarpitter_in_subprocess(fake_tarpit_dir):
     process = subprocess.Popen(
-        ['python3', mean_tarpit.__file__, fake_tarpit_dir],
+        ['python3', mean_tarpit.__file__, fake_tarpit_dir, '--testing'],
         stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True
     )
     first_line = process.stdout.readline()
@@ -34,9 +34,9 @@ def start_main_in_subprocess(fake_tarpit_dir):
 
 
 @pytest.mark.slowtest
-def test_tarpit_process_is_slow(fake_tarpit_dir, start_main_in_subprocess):
+def test_tarpit_process_is_slow(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     print('my pid', os.getpid())
-    timer =  "import time; time.sleep(2.1); start = time.time(); list(range(int(1e6))); print(time.time() - start)"
+    timer =  "import time; time.sleep(0.4); start = time.time(); list(range(int(1e6))); print(time.time() - start)"
     normal = subprocess.check_output(['python', '-c', timer], universal_newlines=True)
     normal = float(normal)
     print("normal", normal)
@@ -50,4 +50,36 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, start_main_in_subprocess):
     assert normal * 10 < slow
     assert normal * 20 < slow
     assert normal * 100 > slow
+
+
+def test_spots_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+    sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid = str(sleeper.pid)
+    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
+        f.write(pid)
+    lines = []
+    for _ in range(10):
+        line = mean_tarpitter_in_subprocess.stdout.readline()
+        lines.append(line)
+        if 'bobbling' in line and pid in line:
+            break
+    else:
+        assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
+    sleeper.kill()
+
+
+def test_spots_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+    sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid = str(sleeper.pid)
+    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
+        f.write(pid)
+    lines = []
+    for _ in range(10):
+        line = mean_tarpitter_in_subprocess.stdout.readline()
+        lines.append(line)
+        if 'hobbling' in line and pid in line:
+            break
+    else:
+        assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
+    sleeper.kill()
 
