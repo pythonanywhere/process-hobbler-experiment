@@ -57,12 +57,13 @@ def hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir):
 def hobble_processes_forever(loop, tarpit_cgroup_dir):
     already_hobbled = set()
     while True:
-        print('hobbling current processes', flush=True)
+        print('hobbling...', flush=True)
         yield from hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir)
         yield from asyncio.sleep(2)
 
 
 def main(tarpit_cgroup_dir):
+    print('Starting mean tarpit')
     loop = asyncio.get_event_loop()
     if not hasattr(loop, 'create_task'):  # was added in 3.4.2
         loop.create_task = asyncio.async
@@ -79,5 +80,6 @@ if __name__ == '__main__':
         tarpit = sys.argv[-1]
     else:
         tarpit = '/mnt/cgroups/cpu/user_types/tarpit'
+    assert os.path.exists(os.path.join(tarpit, 'tasks'))
     main(tarpit)
 
