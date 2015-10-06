@@ -14,7 +14,6 @@ from docopt import docopt
 import os
 import psutil
 import signal
-import sys
 
 
 
@@ -28,19 +27,20 @@ def get_pids(tarpit_cgroup_dir):
 def hobble_process(pid, loop):
     print('hobbling pid', pid)
     pid = int(pid)
-    # process = psutil.Process(pid)
+    process = psutil.Process(pid)
     while True:
         try:
             os.kill(pid, signal.SIGSTOP)
-            # children = yield from loop.run_in_executor(
-            #     loop.threadpool,
-            #     lambda: process.children(recursive=True)
-            # )
-            # for child in children:
-            #     os.kill(child.pid, signal.SIGSTOP)
-            # yield from asyncio.sleep(0.25)
-            # for child in reversed(children):
-            #     os.kill(child.pid, signal.SIGCONT)
+            children = yield from loop.run_in_executor(
+                loop.threadpool,
+                lambda: process.children(recursive=True)
+            )
+            for child in children:
+                print('hobbling child pid', child.pid)
+                os.kill(child.pid, signal.SIGSTOP)
+            yield from asyncio.sleep(0.25)
+            for child in reversed(children):
+                os.kill(child.pid, signal.SIGCONT)
             os.kill(pid, signal.SIGCONT)
             yield from asyncio.sleep(0.01)
 

@@ -52,11 +52,16 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     assert normal * 100 > slow
 
 
+
+def _add_to_tarpit(pid, tarpit_dir):
+    with open(os.path.join(tarpit_dir, 'tasks'), 'a') as f:
+        f.write(str(pid) + '\n')
+
+
 def test_spots_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
-    pid = str(sleeper.pid)
-    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
-        f.write(pid)
+    pid = sleeper.pid
+    _add_to_tarpit(pid, fake_tarpit_dir)
     lines = []
     for _ in range(10):
         line = mean_tarpitter_in_subprocess.stdout.readline().strip()
@@ -70,14 +75,13 @@ def test_spots_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
 
 def test_spots_multiple_processes(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     sleeper1 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
-    pid1 = str(sleeper1.pid)
     sleeper2 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid1 = str(sleeper1.pid)
     pid2 = str(sleeper2.pid)
-    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
-        f.write(pid1 + '\n')
-        f.write(pid2 + '\n')
-    lines = []
+    _add_to_tarpit(pid1, fake_tarpit_dir)
+    _add_to_tarpit(pid2, fake_tarpit_dir)
 
+    lines = []
     for _ in range(20):
         line = mean_tarpitter_in_subprocess.stdout.readline().strip()
         lines.append(line)
@@ -98,15 +102,13 @@ def test_doesnt_hobble_any_old_process(fake_tarpit_dir, mean_tarpitter_in_subpro
         lines.append(line)
 
     assert 'hobbling pid {}'.format(pid) not in lines
-
     sleeper.kill()
 
 
 def test_stops_hobbling_dead_processes(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     p = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(p.pid)
-    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
-        f.write(pid)
+    _add_to_tarpit(pid, fake_tarpit_dir)
 
     hobbling = 'hobbling pid {}'.format(pid)
     stopped = 'process {} no longer exists'.format(pid)
@@ -155,19 +157,25 @@ def test_hobbles_children(fake_tarpit_dir, mean_tarpitter_in_subprocess):
         universal_newlines=True, stdout=subprocess.PIPE
     )
 
+
+    _add_to_tarpit(p.pid, fake_tarpit_dir)
+
     first_pid = p.stdout.readline().strip()
-    print('first pid', first_pid)
     for _ in range(5):
         next_pid = p.stdout.readline().strip()
         if next_pid != first_pid:
             break
-    print('next pid', next_pid)
-    print('parent pid', p.pid)
-    first_pid = int(first_pid)
-    next_pid = int(next_pid)
 
     children = psutil.Process(p.pid).children(recursive=True)
-    assert next_pid in [c.pid for c in children]
+    assert len(children) > 4
+
+    lines = []
+    for _ in range(20):
+        line = mean_tarpitter_in_subprocess.stdout.readline().strip()
+        lines.append(line)
+
+    for c in children:
+        assert 'hobbling child pid {}'.format(c.pid) in lines
 
     p.kill()
     p.wait()
