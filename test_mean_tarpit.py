@@ -59,27 +59,45 @@ def test_spots_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
         f.write(pid)
     lines = []
     for _ in range(10):
-        line = mean_tarpitter_in_subprocess.stdout.readline()
+        line = mean_tarpitter_in_subprocess.stdout.readline().strip()
         lines.append(line)
-        if 'bobbling' in line and pid in line:
+        if line == 'hobbling pid {}'.format(pid):
             break
     else:
         assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
     sleeper.kill()
 
 
-def test_spots_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+def test_spots_multiple_processes(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+    sleeper1 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid1 = str(sleeper1.pid)
+    sleeper2 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid2 = str(sleeper2.pid)
+    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
+        f.write(pid1 + '\n')
+        f.write(pid2 + '\n')
+    lines = []
+
+    for _ in range(20):
+        line = mean_tarpitter_in_subprocess.stdout.readline().strip()
+        lines.append(line)
+
+    assert 'hobbling pid {}'.format(pid1) in lines
+    assert 'hobbling pid {}'.format(pid2) in lines
+
+    sleeper1.kill()
+    sleeper2.kill()
+
+
+def test_doesnt_hobble_any_old_process(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(sleeper.pid)
-    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
-        f.write(pid)
     lines = []
     for _ in range(10):
-        line = mean_tarpitter_in_subprocess.stdout.readline()
+        line = mean_tarpitter_in_subprocess.stdout.readline().strip()
         lines.append(line)
-        if 'hobbling' in line and pid in line:
-            break
-    else:
-        assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
+
+    assert 'hobbling pid {}'.format(pid) not in lines
+
     sleeper.kill()
 
