@@ -101,3 +101,35 @@ def test_doesnt_hobble_any_old_process(fake_tarpit_dir, mean_tarpitter_in_subpro
 
     sleeper.kill()
 
+
+def test_stops_hobbling_dead_processes(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+    p = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid = str(p.pid)
+    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'w') as f:
+        f.write(pid)
+
+    hobbling = 'hobbling pid {}'.format(pid)
+    stopped = 'process {} no longer exists'.format(pid)
+
+    lines = []
+    for _ in range(10):
+        line = mean_tarpitter_in_subprocess.stdout.readline().strip()
+        lines.append(line)
+        if line == hobbling:
+            break
+    else:
+        assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
+
+    p.kill()
+    p.wait()
+
+    for _ in range(10):
+        line = mean_tarpitter_in_subprocess.stdout.readline().strip()
+        lines.append(line)
+
+    assert hobbling in lines
+    assert stopped in lines
+    assert lines.count(hobbling) == 1
+    assert lines.count(stopped) == 1
+    assert lines.index(hobbling) < lines.index(stopped)
+
