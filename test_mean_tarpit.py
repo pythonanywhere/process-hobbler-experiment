@@ -1,10 +1,10 @@
 import os
+import inspect
+import psutil
 import pytest
 import shutil
 import subprocess
 import tempfile
-import threading
-import time
 
 
 from . import mean_tarpit
@@ -36,7 +36,7 @@ def mean_tarpitter_in_subprocess(fake_tarpit_dir):
 @pytest.mark.slowtest
 def test_tarpit_process_is_slow(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     print('my pid', os.getpid())
-    timer =  "import time; time.sleep(0.4); start = time.time(); list(range(int(1e6))); print(time.time() - start)"
+    timer = "import time; time.sleep(0.4); start = time.time(); list(range(int(1e6))); print(time.time() - start)"
     normal = subprocess.check_output(['python', '-c', timer], universal_newlines=True)
     normal = float(normal)
     print("normal", normal)
@@ -132,4 +132,44 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, mean_tarpitter_in_subpro
     assert lines.count(hobbling) == 1
     assert lines.count(stopped) == 1
     assert lines.index(hobbling) < lines.index(stopped)
+
+
+def forker():
+    import os
+    import time
+    for i in range(3):
+        print(os.getpid(), flush=True)
+        os.fork()
+    time.sleep(4)
+
+
+
+def test_hobbles_children(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+    tf = tempfile.NamedTemporaryFile(delete=False)
+    with tf:
+        tf.write(inspect.getsource(forker).encode('utf8'))
+        tf.write('\nforker()\n'.encode('utf8'))
+
+    p = subprocess.Popen(
+        ['python3', tf.name],
+        universal_newlines=True, stdout=subprocess.PIPE
+    )
+
+    first_pid = p.stdout.readline().strip()
+    print('first pid', first_pid)
+    for _ in range(5):
+        next_pid = p.stdout.readline().strip()
+        if next_pid != first_pid:
+            break
+    print('next pid', next_pid)
+    print('parent pid', p.pid)
+    first_pid = int(first_pid)
+    next_pid = int(next_pid)
+
+    children = psutil.Process(p.pid).children(recursive=True)
+    assert next_pid in [c.pid for c in children]
+
+    p.kill()
+    p.wait()
+    os.remove(tf.name)
 
