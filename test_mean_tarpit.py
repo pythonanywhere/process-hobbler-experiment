@@ -18,12 +18,31 @@ def fake_tarpit_dir():
     shutil.rmtree(tempdir)
 
 
+
+def _get_tarpitter_process(fake_tarpit_dir, testing):
+    command = ['python3', mean_tarpit.__file__, fake_tarpit_dir]
+    if testing:
+        command.append('--testing')
+    return subprocess.Popen(
+        command, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
+        stderr=subprocess.STDOUT, universal_newlines=True
+    )
+
 @pytest.yield_fixture
 def tarpitter_subprocess(fake_tarpit_dir):
-    process = subprocess.Popen(
-        ['python3', mean_tarpit.__file__, fake_tarpit_dir, '--testing'],
-        stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True
-    )
+    process = _get_tarpitter_process(fake_tarpit_dir, testing=True)
+    first_line = process.stdout.readline()
+    if 'Traceback' in first_line:
+        assert False, process.stdout.read()
+    yield process
+    process.kill()
+    print('full mean tarpit process output:')
+    print(process.stdout.read())
+
+
+@pytest.yield_fixture
+def nontesting_tarpitter_subprocess(fake_tarpit_dir):
+    process = _get_tarpitter_process(fake_tarpit_dir, testing=False)
     first_line = process.stdout.readline()
     if 'Traceback' in first_line:
         assert False, process.stdout.read()
@@ -184,8 +203,8 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
 
 
 
-def DONTtest_lots_of_processes(fake_tarpit_dir, tarpitter_subprocess):
-    start_times = psutil.Process(tarpitter_subprocess.pid).cpu_times()
+def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
+    start_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
     print('start times', start_times)
     procs = []
     for i in range(100):
@@ -193,14 +212,14 @@ def DONTtest_lots_of_processes(fake_tarpit_dir, tarpitter_subprocess):
         _add_to_tarpit(p.pid, fake_tarpit_dir)
         procs.append(p)
 
-    time.sleep(100)
+    time.sleep(6)
 
-    end_times = psutil.Process(tarpitter_subprocess.pid).cpu_times()
+    end_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
     print('end times', end_times)
 
     assert end_times.user > start_times.user
     assert end_times.system > start_times.system
 
-    assert psutil.Process(tarpitter_subprocess.pid).cpu_percent(interval=0.1) < 10
-    assert psutil.Process(tarpitter_subprocess.pid).cpu_percent(interval=1) < 10
+    assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=0.1) < 10
+    assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=1) < 10
 
