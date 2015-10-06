@@ -5,6 +5,7 @@ import pytest
 import shutil
 import subprocess
 import tempfile
+import time
 
 
 from . import mean_tarpit
@@ -180,4 +181,26 @@ def test_hobbles_children(fake_tarpit_dir, mean_tarpitter_in_subprocess):
     p.kill()
     p.wait()
     os.remove(tf.name)
+
+
+
+def test_lots_of_processes(fake_tarpit_dir, mean_tarpitter_in_subprocess):
+    start_times = psutil.Process(mean_tarpitter_in_subprocess.pid).cpu_times()
+    print('start times', start_times)
+    procs = []
+    for i in range(100):
+        p = subprocess.Popen(['sleep', '100'], universal_newlines=True)
+        _add_to_tarpit(p.pid, fake_tarpit_dir)
+        procs.append(p)
+
+    time.sleep(100)
+
+    end_times = psutil.Process(mean_tarpitter_in_subprocess.pid).cpu_times()
+    print('end times', end_times)
+
+    assert end_times.user > start_times.user
+    assert end_times.system > start_times.system
+
+    assert psutil.Process(mean_tarpitter_in_subprocess.pid).cpu_percent(interval=0.1) < 10
+    assert psutil.Process(mean_tarpitter_in_subprocess.pid).cpu_percent(interval=1) < 10
 
