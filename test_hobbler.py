@@ -8,7 +8,7 @@ import tempfile
 import time
 
 
-from . import mean_tarpit
+from . import hobbler
 
 @pytest.yield_fixture
 def fake_tarpit_dir():
@@ -20,7 +20,7 @@ def fake_tarpit_dir():
 
 
 def _get_tarpitter_process(fake_tarpit_dir, testing):
-    command = ['python3', mean_tarpit.__file__, fake_tarpit_dir]
+    command = ['python3', hobbler.__file__, fake_tarpit_dir]
     if testing:
         command.append('--testing')
     return subprocess.Popen(
@@ -36,7 +36,7 @@ def tarpitter_subprocess(fake_tarpit_dir):
         assert False, process.stdout.read()
     yield process
     process.kill()
-    print('full mean tarpit process output:')
+    print('full hobbler process output:')
     print(process.stdout.read())
 
 
@@ -48,7 +48,7 @@ def nontesting_tarpitter_subprocess(fake_tarpit_dir):
         assert False, process.stdout.read()
     yield process
     process.kill()
-    print('full mean tarpit process output:')
+    print('full hobbler process output:')
     print(process.stdout.read())
 
 

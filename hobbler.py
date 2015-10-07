@@ -1,8 +1,13 @@
 #!/usr/bin/python3.4
-"""Mean tarpit, a process hobbler
+"""A process "hobbler" that uses SIGSTOP and SIGCONT to pause processes for 90%
+of the time, allowing them only a few hundredths of a second of execution time
+in any given second.
 
 Usage:
-  mean_tarpit.py <tarpit_cgroup_dir> [--testing]
+  hobbler.py <cgroup_dir> [--testing]
+
+<cgroup_dir> is assumed to be a cgroup directory, but it can be any directory
+as long as it contains a file called "tasks" with a list of pids in it.
 
 Options:
   -h --help             Show this screen.
@@ -18,8 +23,8 @@ import signal
 
 
 @asyncio.coroutine
-def get_pids(tarpit_cgroup_dir):
-    with open(os.path.join(tarpit_cgroup_dir, 'tasks')) as f:
+def get_pids(cgroup_dir):
+    with open(os.path.join(cgroup_dir, 'tasks')) as f:
         return f.readlines()
 
 
@@ -50,9 +55,9 @@ def hobble_process(pid, loop):
 
 
 @asyncio.coroutine
-def hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir):
+def hobble_current_processes(loop, already_hobbled, cgroup_dir):
     print('getting latest process list')
-    pids = yield from get_pids(tarpit_cgroup_dir)
+    pids = yield from get_pids(cgroup_dir)
     for pid in pids:
         if pid in already_hobbled:
             continue
@@ -64,22 +69,22 @@ def hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir):
 
 
 @asyncio.coroutine
-def hobble_processes_forever(loop, tarpit_cgroup_dir, tarpit_update_pause):
+def hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause):
     already_hobbled = set()
     while True:
         print('hobbling...', flush=True)
-        yield from hobble_current_processes(loop, already_hobbled, tarpit_cgroup_dir)
+        yield from hobble_current_processes(loop, already_hobbled, cgroup_dir)
         yield from asyncio.sleep(tarpit_update_pause)
 
 
-def main(tarpit_cgroup_dir, tarpit_update_pause):
-    print('Starting mean tarpit')
+def main(cgroup_dir, tarpit_update_pause):
+    print('Starting process hobbler')
     loop = asyncio.get_event_loop()
     if not hasattr(loop, 'create_task'):  # was added in 3.4.2
         loop.create_task = asyncio.async
     loop.threadpool = ThreadPoolExecutor(max_workers=20)
     loop.create_task(
-        hobble_processes_forever(loop, tarpit_cgroup_dir, tarpit_update_pause)
+        hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause)
     )
     loop.run_forever()
     loop.close()
@@ -87,8 +92,8 @@ def main(tarpit_cgroup_dir, tarpit_update_pause):
 
 if __name__ == '__main__':
     args = docopt(__doc__)
-    tarpit = args['<tarpit_cgroup_dir>']
-    assert os.path.exists(os.path.join(tarpit, 'tasks'))
+    cgroup = args['<cgroup_dir>']  # doesnt have to be a real cgroup, just needs to contain a file called "tasks" with a list of pids in it
+    assert os.path.exists(os.path.join(cgroup, 'tasks'))
     pause = 2 if not args.get('--testing') else 0.3
-    main(tarpit, pause)
+    main(cgroup, pause)
 
