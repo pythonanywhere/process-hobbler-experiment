@@ -223,3 +223,37 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
     assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=0.1) < 10
     assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=1) < 10
 
+
+def test_get_pids_returns_trees_of_parents_and_chidren():
+    tf = tempfile.NamedTemporaryFile(delete=False)
+    with tf:
+        tf.write(inspect.getsource(forker).encode('utf8'))
+        tf.write('\nforker()\n'.encode('utf8'))
+
+    p1 = subprocess.Popen(
+        ['python3', tf.name],
+        universal_newlines=True, stdout=subprocess.PIPE
+    )
+    p2 = subprocess.Popen(
+        ['python3', tf.name],
+        universal_newlines=True, stdout=subprocess.PIPE
+    )
+    time.sleep(3)
+
+    tempdir = tempfile.mkdtemp()
+    p1_children = psutil.Process(p1.pid).children(recursive=True)
+    p2_children = psutil.Process(p2.pid).children(recursive=True)
+    for p in p1_children + p2_children:
+        with open(os.path.join(tempdir, 'tasks'), 'a') as f:
+            f.write(str(p.pid) + '\n')
+
+    parents = list(hobbler.get_pids(tempdir))
+    assert len(parents) == 2
+    parent1, parent2 = parents
+    assert parent1.pid == p1.pid
+    assert parent2.pid == p2.pid
+    assert parent1.children == p1_children
+    assert parent2.children == p2_children
+
+
+

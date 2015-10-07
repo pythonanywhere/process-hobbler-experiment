@@ -22,10 +22,27 @@ import signal
 
 
 
-@asyncio.coroutine
-def get_pids(cgroup_dir):
+def get_all_pids(cgroup_dir):
     with open(os.path.join(cgroup_dir, 'tasks')) as f:
-        return f.readlines()
+        for line in f.readlines():
+            try:
+                yield int(line)
+            except ValueError:
+                pass
+
+
+def get_pids(cgroup_dir):
+    all_pids = set(get_all_pids(cgroup_dir))
+    parents = set()
+    for p in all_pids:
+        proc = psutil.Process(p)
+        if proc.parent().pid not in all_pids:
+            parents.add(proc)
+    for p in parents:
+        p.children = p.children(recursive=True)
+    print(all_pids)
+    print(parents)
+    return parents
 
 
 @asyncio.coroutine
@@ -36,16 +53,16 @@ def hobble_process(pid, loop):
     while True:
         try:
             os.kill(pid, signal.SIGSTOP)
-            children = yield from loop.run_in_executor(
-                loop.threadpool,
-                lambda: process.children(recursive=True)
-            )
-            for child in children:
-                print('hobbling child pid', child.pid)
-                os.kill(child.pid, signal.SIGSTOP)
+            # children = yield from loop.run_in_executor(
+            #     loop.threadpool,
+            #     lambda: process.children(recursive=True)
+            # )
+            # for child in children:
+            #     print('hobbling child pid', child.pid)
+            #     os.kill(child.pid, signal.SIGSTOP)
             yield from asyncio.sleep(0.25)
-            for child in reversed(children):
-                os.kill(child.pid, signal.SIGCONT)
+            # for child in reversed(children):
+            #     os.kill(child.pid, signal.SIGCONT)
             os.kill(pid, signal.SIGCONT)
             yield from asyncio.sleep(0.01)
 
@@ -57,7 +74,7 @@ def hobble_process(pid, loop):
 @asyncio.coroutine
 def hobble_current_processes(loop, already_hobbled, cgroup_dir):
     print('getting latest process list')
-    pids = yield from get_pids(cgroup_dir)
+    pids = get_pids(cgroup_dir)
     for pid in pids:
         if pid in already_hobbled:
             continue
