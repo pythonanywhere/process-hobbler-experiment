@@ -13,12 +13,13 @@ Options:
   -h --help             Show this screen.
   --testing             Testing mode (faster loop)
 """
-import asyncio
 from collections import namedtuple
 from docopt import docopt
 import os
 import psutil
 import signal
+import time
+import threading
 
 HOBBLING = 'hobbling pid {}'
 HOBBLING_CHILD = 'hobbling child pid {}'
@@ -52,7 +53,6 @@ def get_top_level_processes(cgroup_dir):
     return top_levels
 
 
-@asyncio.coroutine
 def hobble_process_tree(parent):
     print(HOBBLING.format(parent.pid))
     while True:
@@ -61,50 +61,41 @@ def hobble_process_tree(parent):
             for child in parent.children:
                 print(HOBBLING_CHILD.format(child))
                 os.kill(child, signal.SIGSTOP)
-            yield from asyncio.sleep(0.25)
+            time.sleep(0.25)
             for child in reversed(parent.children):
                 os.kill(child, signal.SIGCONT)
             os.kill(parent.pid, signal.SIGCONT)
-            yield from asyncio.sleep(0.01)
+            time.sleep(0.01)
 
         except ProcessLookupError:
             print(HOBBLED_PROCESS_DIED.format(parent.pid))
             break
 
 
-@asyncio.coroutine
-def hobble_current_processes(loop, already_hobbled, cgroup_dir):
+def hobble_current_processes(already_hobbled, cgroup_dir):
     print('getting latest process list')
     parents = get_top_level_processes(cgroup_dir)
     for parent in parents:
         if parent.pid in already_hobbled:
             continue
         already_hobbled.add(parent.pid)
-        loop.create_task(
-            hobble_process_tree(parent)
-        )
+        threading.Thread(target=lambda: hobble_process_tree(parent)).start()
     print('now hobbling {} processes'.format(len(already_hobbled)))
 
 
-@asyncio.coroutine
-def hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause):
+def hobble_processes_forever(cgroup_dir, tarpit_update_pause):
     already_hobbled = set()
     while True:
         print('hobbling...', flush=True)
-        yield from hobble_current_processes(loop, already_hobbled, cgroup_dir)
-        yield from asyncio.sleep(tarpit_update_pause)
+        threading.Thread(
+            target=lambda: hobble_current_processes(already_hobbled, cgroup_dir)
+        ).start()
+        time.sleep(tarpit_update_pause)
 
 
 def main(cgroup_dir, tarpit_update_pause):
     print('Starting process hobbler')
-    loop = asyncio.get_event_loop()
-    if not hasattr(loop, 'create_task'):  # was added in 3.4.2
-        loop.create_task = asyncio.async
-    loop.create_task(
-        hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause)
-    )
-    loop.run_forever()
-    loop.close()
+    hobble_processes_forever(cgroup_dir, tarpit_update_pause)
 
 
 if __name__ == '__main__':
