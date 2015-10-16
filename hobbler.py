@@ -14,12 +14,12 @@ Options:
   --testing             Testing mode (faster loop)
 """
 import asyncio
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from docopt import docopt
 import os
 import psutil
 import signal
-
 
 
 def get_all_pids(cgroup_dir):
@@ -30,57 +30,52 @@ def get_all_pids(cgroup_dir):
             except ValueError:
                 pass
 
+Proc = namedtuple('Proc', 'pid children')
+
 
 def get_pids(cgroup_dir):
     all_pids = set(get_all_pids(cgroup_dir))
-    parents = set()
-    for p in all_pids:
-        proc = psutil.Process(p)
-        if proc.parent().pid not in all_pids:
-            parents.add(proc)
-    for p in parents:
-        p.children = p.children(recursive=True)
-    print(all_pids)
-    print(parents)
+    parents = []
+    for pid in all_pids:
+        try:
+            proc = psutil.Process(pid)
+            if proc.parent().pid not in all_pids:
+                parents.append(Proc(pid, list(c.pid for c in proc.children(recursive=True))))
+        except psutil.NoSuchProcess:
+            print('task list process {} no longer exists'.format(pid))
     return parents
 
 
 @asyncio.coroutine
-def hobble_process(pid, loop):
-    print('hobbling pid', pid)
-    pid = int(pid)
-    process = psutil.Process(pid)
+def hobble_process_tree(parent, loop):
+    print('hobbling pid', parent.pid)
     while True:
         try:
-            os.kill(pid, signal.SIGSTOP)
-            # children = yield from loop.run_in_executor(
-            #     loop.threadpool,
-            #     lambda: process.children(recursive=True)
-            # )
-            # for child in children:
-            #     print('hobbling child pid', child.pid)
-            #     os.kill(child.pid, signal.SIGSTOP)
+            os.kill(parent.pid, signal.SIGSTOP)
+            for child in parent.children:
+                print('hobbling child pid', child)
+                os.kill(child, signal.SIGSTOP)
             yield from asyncio.sleep(0.25)
-            # for child in reversed(children):
-            #     os.kill(child.pid, signal.SIGCONT)
-            os.kill(pid, signal.SIGCONT)
+            for child in reversed(parent.children):
+                os.kill(child, signal.SIGCONT)
+            os.kill(parent.pid, signal.SIGCONT)
             yield from asyncio.sleep(0.01)
 
         except ProcessLookupError:
-            print('process {} no longer exists'.format(pid))
+            print('hobbled process {} no longer exists'.format(parent.pid))
             break
 
 
 @asyncio.coroutine
 def hobble_current_processes(loop, already_hobbled, cgroup_dir):
     print('getting latest process list')
-    pids = get_pids(cgroup_dir)
-    for pid in pids:
-        if pid in already_hobbled:
+    parents = get_pids(cgroup_dir)
+    for parent in parents:
+        if parent.pid in already_hobbled:
             continue
-        already_hobbled.add(pid)
+        already_hobbled.add(parent.pid)
         loop.create_task(
-            hobble_process(pid, loop)
+            hobble_process_tree(parent, loop)
         )
     print('now hobbling {} processes'.format(len(already_hobbled)))
 

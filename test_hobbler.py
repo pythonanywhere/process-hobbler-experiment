@@ -20,7 +20,7 @@ def fake_tarpit_dir():
 
 
 def _get_tarpitter_process(fake_tarpit_dir, testing):
-    command = ['python3', hobbler.__file__, fake_tarpit_dir]
+    command = ['python3.4', hobbler.__file__, fake_tarpit_dir]
     if testing:
         command.append('--testing')
     return subprocess.Popen(
@@ -131,7 +131,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, tarpitter_subprocess):
     _add_to_tarpit(pid, fake_tarpit_dir)
 
     hobbling = 'hobbling pid {}'.format(pid)
-    stopped = 'process {} no longer exists'.format(pid)
+    stopped = 'hobbled process {} no longer exists'.format(pid)
 
     lines = []
     for _ in range(10):
@@ -149,6 +149,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, tarpitter_subprocess):
         line = tarpitter_subprocess.stdout.readline().strip()
         lines.append(line)
 
+    print('\n'.join(lines))
     assert hobbling in lines
     assert stopped in lines
     assert lines.count(hobbling) == 1
@@ -202,7 +203,7 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
     os.remove(tf.name)
 
 
-
+@pytest.mark.slowtest
 def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
     start_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
     print('start times', start_times)
@@ -241,15 +242,15 @@ def test_get_pids_returns_trees_of_parents_and_chidren():
     time.sleep(1)
 
     tempdir = tempfile.mkdtemp()
-    p1_children = psutil.Process(p1.pid).children(recursive=True)
-    p2_children = psutil.Process(p2.pid).children(recursive=True)
+    p1_children = [c.pid for c in psutil.Process(p1.pid).children(recursive=True)]
+    p2_children = [c.pid for c in psutil.Process(p2.pid).children(recursive=True)]
     with open(os.path.join(tempdir, 'tasks'), 'a') as f:
         f.write(str(p1.pid) + '\n')
         f.write(str(p2.pid) + '\n')
 
     for p in p1_children + p2_children:
         with open(os.path.join(tempdir, 'tasks'), 'a') as f:
-            f.write(str(p.pid) + '\n')
+            f.write(str(p) + '\n')
 
     print(subprocess.check_output('ps auxf | grep python', shell=True).decode('utf8'))
 
