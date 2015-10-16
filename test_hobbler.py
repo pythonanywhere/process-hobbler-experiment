@@ -238,22 +238,33 @@ def test_get_pids_returns_trees_of_parents_and_chidren():
         ['python3', tf.name],
         universal_newlines=True, stdout=subprocess.PIPE
     )
-    time.sleep(3)
+    time.sleep(1)
 
     tempdir = tempfile.mkdtemp()
     p1_children = psutil.Process(p1.pid).children(recursive=True)
     p2_children = psutil.Process(p2.pid).children(recursive=True)
+    with open(os.path.join(tempdir, 'tasks'), 'a') as f:
+        f.write(str(p1.pid) + '\n')
+        f.write(str(p2.pid) + '\n')
+
     for p in p1_children + p2_children:
         with open(os.path.join(tempdir, 'tasks'), 'a') as f:
             f.write(str(p.pid) + '\n')
 
+    print(subprocess.check_output('ps auxf | grep python', shell=True).decode('utf8'))
+
     parents = list(hobbler.get_pids(tempdir))
     assert len(parents) == 2
     parent1, parent2 = parents
-    assert parent1.pid == p1.pid
-    assert parent2.pid == p2.pid
-    assert parent1.children == p1_children
-    assert parent2.children == p2_children
+    assert {parent1.pid, parent2.pid} == {p1.pid, p2.pid}
+    if parent1.pid == p1.pid:
+        assert parent2.pid == p2.pid
+        assert parent1.children == p1_children
+        assert parent2.children == p2_children
+    else:
+        assert parent1.pid == p2.pid
+        assert parent1.children == p2_children
+        assert parent2.children == p1_children
 
 
 
