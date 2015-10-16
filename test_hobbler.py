@@ -223,7 +223,7 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
     assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=1) < 10
 
 
-def test_get_pids_returns_trees_of_parents_and_chidren():
+def test_get_top_level_processes_returns_list_of_parents_and_with_chidren():
     tf = tempfile.NamedTemporaryFile(delete=False)
     with tf:
         tf.write(inspect.getsource(forker).encode('utf8'))
@@ -252,7 +252,7 @@ def test_get_pids_returns_trees_of_parents_and_chidren():
 
     print(subprocess.check_output('ps auxf | grep python', shell=True).decode('utf8'))
 
-    parents = list(hobbler.get_pids(tempdir))
+    parents = list(hobbler.get_top_level_processes(tempdir))
     assert len(parents) == 2
     parent1, parent2 = parents
     assert {parent1.pid, parent2.pid} == {p1.pid, p2.pid}

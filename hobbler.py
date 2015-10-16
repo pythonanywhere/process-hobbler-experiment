@@ -37,7 +37,7 @@ def get_all_pids(cgroup_dir):
 Proc = namedtuple('Proc', 'pid children')
 
 
-def get_pids(cgroup_dir):
+def get_top_level_processes(cgroup_dir):
     all_pids = set(get_all_pids(cgroup_dir))
     parents = []
     for pid in all_pids:
@@ -73,7 +73,7 @@ def hobble_process_tree(parent):
 @asyncio.coroutine
 def hobble_current_processes(loop, already_hobbled, cgroup_dir):
     print('getting latest process list')
-    parents = get_pids(cgroup_dir)
+    parents = get_top_level_processes(cgroup_dir)
     for parent in parents:
         if parent.pid in already_hobbled:
             continue
