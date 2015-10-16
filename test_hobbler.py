@@ -20,20 +20,22 @@ def fake_tarpit_dir():
 
 
 def _get_tarpitter_process(fake_tarpit_dir, testing):
-    command = ['python3.4', hobbler.__file__, fake_tarpit_dir]
+    command = [hobbler.__file__, fake_tarpit_dir]
     if testing:
         command.append('--testing')
-    return subprocess.Popen(
+    process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
         stderr=subprocess.STDOUT, universal_newlines=True
     )
+    first_line = process.stdout.readline()
+    if 'Traceback' in first_line:
+        assert False, process.stdout.read()
+    return process
+
 
 @pytest.yield_fixture
 def tarpitter_subprocess(fake_tarpit_dir):
     process = _get_tarpitter_process(fake_tarpit_dir, testing=True)
-    first_line = process.stdout.readline()
-    if 'Traceback' in first_line:
-        assert False, process.stdout.read()
     yield process
     process.kill()
     print('full hobbler process output:')
@@ -43,9 +45,6 @@ def tarpitter_subprocess(fake_tarpit_dir):
 @pytest.yield_fixture
 def nontesting_tarpitter_subprocess(fake_tarpit_dir):
     process = _get_tarpitter_process(fake_tarpit_dir, testing=False)
-    first_line = process.stdout.readline()
-    if 'Traceback' in first_line:
-        assert False, process.stdout.read()
     yield process
     process.kill()
     print('full hobbler process output:')
