@@ -211,7 +211,7 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
         _add_to_tarpit(p.pid, fake_tarpit_dir)
         procs.append(p)
 
-    time.sleep(6)
+    time.sleep(7) # time for 3 iterations
 
     end_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
     print('end times', end_times)
@@ -219,8 +219,8 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
     assert end_times.user > start_times.user
     assert end_times.system > start_times.system
 
-    assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=0.1) < 10
-    assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=1) < 10
+    psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=0.1)  # warm-up
+    assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=2) < 10
 
 
 def test_get_top_level_processes_returns_list_of_parents_and_with_chidren():
