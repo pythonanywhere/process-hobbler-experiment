@@ -51,7 +51,7 @@ def get_pids(cgroup_dir):
 
 
 @asyncio.coroutine
-def hobble_process_tree(parent, loop):
+def hobble_process_tree(parent):
     print(HOBBLING.format(parent.pid))
     while True:
         try:
@@ -79,7 +79,7 @@ def hobble_current_processes(loop, already_hobbled, cgroup_dir):
             continue
         already_hobbled.add(parent.pid)
         loop.create_task(
-            hobble_process_tree(parent, loop)
+            hobble_process_tree(parent)
         )
     print('now hobbling {} processes'.format(len(already_hobbled)))
 
