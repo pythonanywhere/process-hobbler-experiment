@@ -21,6 +21,10 @@ import os
 import psutil
 import signal
 
+HOBBLING = 'hobbling pid {}'
+HOBBLING_CHILD = 'hobbling child pid {}'
+HOBBLED_PROCESS_DIED = 'hobbled process {} no longer exists'
+
 
 def get_all_pids(cgroup_dir):
     with open(os.path.join(cgroup_dir, 'tasks')) as f:
@@ -48,12 +52,12 @@ def get_pids(cgroup_dir):
 
 @asyncio.coroutine
 def hobble_process_tree(parent, loop):
-    print('hobbling pid', parent.pid)
+    print(HOBBLING.format(parent.pid))
     while True:
         try:
             os.kill(parent.pid, signal.SIGSTOP)
             for child in parent.children:
-                print('hobbling child pid', child)
+                print(HOBBLING_CHILD.format(child))
                 os.kill(child, signal.SIGSTOP)
             yield from asyncio.sleep(0.25)
             for child in reversed(parent.children):
@@ -62,7 +66,7 @@ def hobble_process_tree(parent, loop):
             yield from asyncio.sleep(0.01)
 
         except ProcessLookupError:
-            print('hobbled process {} no longer exists'.format(parent.pid))
+            print(HOBBLED_PROCESS_DIED.format(parent.pid))
             break
 
 

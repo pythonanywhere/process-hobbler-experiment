@@ -86,7 +86,7 @@ def test_spots_process(fake_tarpit_dir, tarpitter_subprocess):
     for _ in range(10):
         line = tarpitter_subprocess.stdout.readline().strip()
         lines.append(line)
-        if line == 'hobbling pid {}'.format(pid):
+        if line == hobbler.HOBBLING.format(pid):
             break
     else:
         assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
@@ -106,8 +106,8 @@ def test_spots_multiple_processes(fake_tarpit_dir, tarpitter_subprocess):
         line = tarpitter_subprocess.stdout.readline().strip()
         lines.append(line)
 
-    assert 'hobbling pid {}'.format(pid1) in lines
-    assert 'hobbling pid {}'.format(pid2) in lines
+    assert hobbler.HOBBLING.format(pid1) in lines
+    assert hobbler.HOBBLING.format(pid2) in lines
 
     sleeper1.kill()
     sleeper2.kill()
@@ -121,7 +121,7 @@ def test_doesnt_hobble_any_old_process(fake_tarpit_dir, tarpitter_subprocess):
         line = tarpitter_subprocess.stdout.readline().strip()
         lines.append(line)
 
-    assert 'hobbling pid {}'.format(pid) not in lines
+    assert hobbler.HOBBLING.format(pid) not in lines
     sleeper.kill()
 
 
@@ -130,8 +130,8 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, tarpitter_subprocess):
     pid = str(p.pid)
     _add_to_tarpit(pid, fake_tarpit_dir)
 
-    hobbling = 'hobbling pid {}'.format(pid)
-    stopped = 'hobbled process {} no longer exists'.format(pid)
+    hobbling = hobbler.HOBBLING.format(pid)
+    stopped = hobbler.HOBBLED_PROCESS_DIED.format(pid)
 
     lines = []
     for _ in range(10):
@@ -172,13 +172,10 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
     with tf:
         tf.write(inspect.getsource(forker).encode('utf8'))
         tf.write('\nforker()\n'.encode('utf8'))
-
     p = subprocess.Popen(
         ['python3', tf.name],
         universal_newlines=True, stdout=subprocess.PIPE
     )
-
-
     _add_to_tarpit(p.pid, fake_tarpit_dir)
 
     first_pid = p.stdout.readline().strip()
@@ -187,6 +184,7 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
         if next_pid != first_pid:
             break
 
+    time.sleep(0.5)  # make sure they've all started
     children = psutil.Process(p.pid).children(recursive=True)
     assert len(children) > 4
 
@@ -196,7 +194,7 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
         lines.append(line)
 
     for c in children:
-        assert 'hobbling child pid {}'.format(c.pid) in lines
+        assert hobbler.HOBBLING_CHILD.format(c.pid) in lines
 
     p.kill()
     p.wait()
@@ -266,6 +264,4 @@ def test_get_pids_returns_trees_of_parents_and_chidren():
         assert parent1.pid == p2.pid
         assert parent1.children == p2_children
         assert parent2.children == p1_children
-
-
 
