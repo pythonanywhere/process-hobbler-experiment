@@ -8,7 +8,7 @@ import tempfile
 import time
 
 
-from . import hobbler
+import hobbler
 
 @pytest.yield_fixture
 def fake_tarpit_dir():
