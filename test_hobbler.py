@@ -205,7 +205,7 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
     start_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
     print('start times', start_times)
     procs = []
-    for i in range(100):
+    for i in range(200):
         p = subprocess.Popen(['sleep', '100'], universal_newlines=True)
         _add_to_tarpit(p.pid, fake_tarpit_dir)
         procs.append(p)
