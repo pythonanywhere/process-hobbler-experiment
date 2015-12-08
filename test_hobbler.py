@@ -19,7 +19,7 @@ def fake_tarpit_dir():
 
 
 
-def _get_tarpitter_process(fake_tarpit_dir, testing):
+def _get_hobbler_process(fake_tarpit_dir, testing):
     command = [hobbler.__file__, fake_tarpit_dir]
     if testing:
         command.append('--testing')
@@ -34,8 +34,8 @@ def _get_tarpitter_process(fake_tarpit_dir, testing):
 
 
 @pytest.yield_fixture
-def tarpitter_subprocess(fake_tarpit_dir):
-    process = _get_tarpitter_process(fake_tarpit_dir, testing=True)
+def hobbler_process(fake_tarpit_dir):
+    process = _get_hobbler_process(fake_tarpit_dir, testing=True)
     yield process
     process.kill()
     print('full hobbler process output:')
@@ -43,8 +43,8 @@ def tarpitter_subprocess(fake_tarpit_dir):
 
 
 @pytest.yield_fixture
-def nontesting_tarpitter_subprocess(fake_tarpit_dir):
-    process = _get_tarpitter_process(fake_tarpit_dir, testing=False)
+def nontesting_hobbler_process(fake_tarpit_dir):
+    process = _get_hobbler_process(fake_tarpit_dir, testing=False)
     yield process
     process.kill()
     print('full hobbler process output:')
@@ -53,7 +53,7 @@ def nontesting_tarpitter_subprocess(fake_tarpit_dir):
 
 
 @pytest.mark.slowtest
-def test_tarpit_process_is_slow(fake_tarpit_dir, tarpitter_subprocess):
+def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
     print('my pid', os.getpid())
     timer = "import time; time.sleep(0.4); start = time.time(); list(range(int(1e6))); print(time.time() - start)"
     normal = subprocess.check_output(['python', '-c', timer], universal_newlines=True)
@@ -77,13 +77,13 @@ def _add_to_tarpit(pid, tarpit_dir):
         f.write(str(pid) + '\n')
 
 
-def test_spots_process(fake_tarpit_dir, tarpitter_subprocess):
+def test_spots_process(fake_tarpit_dir, hobbler_process):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = sleeper.pid
     _add_to_tarpit(pid, fake_tarpit_dir)
     lines = []
     for _ in range(10):
-        line = tarpitter_subprocess.stdout.readline().strip()
+        line = hobbler_process.stdout.readline().strip()
         lines.append(line)
         if line == hobbler.HOBBLING.format(pid):
             break
@@ -92,7 +92,7 @@ def test_spots_process(fake_tarpit_dir, tarpitter_subprocess):
     sleeper.kill()
 
 
-def test_spots_multiple_processes(fake_tarpit_dir, tarpitter_subprocess):
+def test_spots_multiple_processes(fake_tarpit_dir, hobbler_process):
     sleeper1 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     sleeper2 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid1 = str(sleeper1.pid)
@@ -102,7 +102,7 @@ def test_spots_multiple_processes(fake_tarpit_dir, tarpitter_subprocess):
 
     lines = []
     for _ in range(20):
-        line = tarpitter_subprocess.stdout.readline().strip()
+        line = hobbler_process.stdout.readline().strip()
         lines.append(line)
 
     assert hobbler.HOBBLING.format(pid1) in lines
@@ -112,19 +112,19 @@ def test_spots_multiple_processes(fake_tarpit_dir, tarpitter_subprocess):
     sleeper2.kill()
 
 
-def test_doesnt_hobble_any_old_process(fake_tarpit_dir, tarpitter_subprocess):
+def test_doesnt_hobble_any_old_process(fake_tarpit_dir, hobbler_process):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(sleeper.pid)
     lines = []
     for _ in range(10):
-        line = tarpitter_subprocess.stdout.readline().strip()
+        line = hobbler_process.stdout.readline().strip()
         lines.append(line)
 
     assert hobbler.HOBBLING.format(pid) not in lines
     sleeper.kill()
 
 
-def test_stops_hobbling_dead_processes(fake_tarpit_dir, tarpitter_subprocess):
+def test_stops_hobbling_dead_processes(fake_tarpit_dir, hobbler_process):
     p = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(p.pid)
     _add_to_tarpit(pid, fake_tarpit_dir)
@@ -134,7 +134,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, tarpitter_subprocess):
 
     lines = []
     for _ in range(10):
-        line = tarpitter_subprocess.stdout.readline().strip()
+        line = hobbler_process.stdout.readline().strip()
         lines.append(line)
         if line == hobbling:
             break
@@ -145,7 +145,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, tarpitter_subprocess):
     p.wait()
 
     for _ in range(10):
-        line = tarpitter_subprocess.stdout.readline().strip()
+        line = hobbler_process.stdout.readline().strip()
         lines.append(line)
 
     print('\n'.join(lines))
@@ -166,7 +166,7 @@ def forker():
 
 
 
-def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
+def test_hobbles_children(fake_tarpit_dir, hobbler_process):
     tf = tempfile.NamedTemporaryFile(delete=False)
     with tf:
         tf.write(inspect.getsource(forker).encode('utf8'))
@@ -189,7 +189,7 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
 
     lines = []
     for _ in range(20):
-        line = tarpitter_subprocess.stdout.readline().strip()
+        line = hobbler_process.stdout.readline().strip()
         lines.append(line)
 
     for c in children:
@@ -201,8 +201,8 @@ def test_hobbles_children(fake_tarpit_dir, tarpitter_subprocess):
 
 
 @pytest.mark.slowtest
-def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
-    start_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
+def test_lots_of_processes(fake_tarpit_dir, nontesting_hobbler_process):
+    start_times = psutil.Process(nontesting_hobbler_process.pid).cpu_times()
     print('start times', start_times)
     procs = []
     for i in range(200):
@@ -212,14 +212,14 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_tarpitter_subprocess):
 
     time.sleep(7) # time for 3 iterations
 
-    end_times = psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_times()
+    end_times = psutil.Process(nontesting_hobbler_process.pid).cpu_times()
     print('end times', end_times)
 
     assert end_times.user > start_times.user
     assert end_times.system > start_times.system
 
-    psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=0.1)  # warm-up
-    assert psutil.Process(nontesting_tarpitter_subprocess.pid).cpu_percent(interval=2) < 10
+    psutil.Process(nontesting_hobbler_process.pid).cpu_percent(interval=0.1)  # warm-up
+    assert psutil.Process(nontesting_hobbler_process.pid).cpu_percent(interval=2) < 10
 
 
 def test_get_top_level_processes_returns_list_of_parents_and_with_chidren():
