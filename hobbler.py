@@ -15,7 +15,6 @@ Options:
 """
 import asyncio
 from collections import namedtuple
-from concurrent.futures import ThreadPoolExecutor
 from docopt import docopt
 import os
 import psutil
@@ -98,7 +97,6 @@ def main(cgroup_dir, tarpit_update_pause):
     loop = asyncio.get_event_loop()
     if not hasattr(loop, 'create_task'):  # was added in 3.4.2
         loop.create_task = asyncio.async
-    loop.threadpool = ThreadPoolExecutor(max_workers=20)
     loop.create_task(
         hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause)
     )
