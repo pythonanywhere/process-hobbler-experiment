@@ -33,20 +33,23 @@ def get_all_pids(cgroup_dir):
             except ValueError:
                 pass
 
-Parent = namedtuple('Parent', 'pid children')
+TopLevelProcess = namedtuple('TopLevelProcess', 'pid children')
 
 
 def get_top_level_processes(cgroup_dir):
     all_pids = set(get_all_pids(cgroup_dir))
-    parents = []
+    top_levels = []
     for pid in all_pids:
         try:
             process = psutil.Process(pid)
             if process.parent().pid not in all_pids:
-                parents.append(Parent(pid, list(c.pid for c in process.children(recursive=True))))
+                top_levels.append(TopLevelProcess(
+                    pid,
+                    list(c.pid for c in process.children(recursive=True))
+                ))
         except psutil.NoSuchProcess:
             print('task list process {} no longer exists'.format(pid))
-    return parents
+    return top_levels
 
 
 @asyncio.coroutine
