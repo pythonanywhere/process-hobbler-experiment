@@ -2,6 +2,7 @@ import os
 import inspect
 import psutil
 import pytest
+import random
 import shutil
 import subprocess
 import tempfile
@@ -49,7 +50,6 @@ def nontesting_hobbler_process(fake_tarpit_dir):
     process.kill()
     print('full hobbler process output:')
     print(process.stdout.read())
-
 
 
 @pytest.mark.slowtest
@@ -155,7 +155,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, hobbler_process):
     assert lines.index(hobbling) < lines.index(stopped)
 
 
-def forker():
+def _forker():
     import os
     import time
     for i in range(3):
@@ -164,27 +164,26 @@ def forker():
     time.sleep(4)
 
 
-
-def test_hobbles_children(fake_tarpit_dir, hobbler_process):
+def _get_forkey_process_tree():
     tf = tempfile.NamedTemporaryFile(delete=False)
     with tf:
-        tf.write(inspect.getsource(forker).encode('utf8'))
-        tf.write('\nforker()\n'.encode('utf8'))
-    p = subprocess.Popen(
+        tf.write(inspect.getsource(_forker).encode('utf8'))
+        tf.write('\n_forker()\n'.encode('utf8'))
+    toplevel = subprocess.Popen(
         ['python3', tf.name],
         universal_newlines=True, stdout=subprocess.PIPE
     )
-    _add_to_tarpit(p.pid, fake_tarpit_dir)
+    while len(psutil.Process(toplevel.pid).children(recursive=True)) < 7:
+        time.sleep(0.1)
+    os.remove(tf.name)
+    return toplevel
 
-    first_pid = p.stdout.readline().strip()
-    for _ in range(5):
-        next_pid = p.stdout.readline().strip()
-        if next_pid != first_pid:
-            break
 
-    time.sleep(0.5)  # make sure they've all started
-    children = psutil.Process(p.pid).children(recursive=True)
-    assert len(children) > 4
+
+def test_hobbles_children(fake_tarpit_dir, hobbler_process):
+    forker = _get_forkey_process_tree()
+    _add_to_tarpit(forker.pid, fake_tarpit_dir)
+    children = psutil.Process(forker.pid).children(recursive=True)
 
     lines = []
     for _ in range(20):
@@ -194,9 +193,8 @@ def test_hobbles_children(fake_tarpit_dir, hobbler_process):
     for c in children:
         assert hobbler.HOBBLING_CHILD.format(c.pid) in lines
 
-    p.kill()
-    p.wait()
-    os.remove(tf.name)
+    forker.kill()
+    forker.wait()
 
 
 @pytest.mark.slowtest
@@ -221,45 +219,30 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_hobbler_process):
     assert psutil.Process(nontesting_hobbler_process.pid).cpu_percent(interval=2) < 10
 
 
-def test_get_top_level_processes_returns_list_of_parents_and_with_chidren():
-    tf = tempfile.NamedTemporaryFile(delete=False)
-    with tf:
-        tf.write(inspect.getsource(forker).encode('utf8'))
-        tf.write('\nforker()\n'.encode('utf8'))
+def test_get_top_level_processes_returns_list_of_parents_with_children(fake_tarpit_dir):
+    forker1 = _get_forkey_process_tree()
+    forker2 = _get_forkey_process_tree()
+    print(subprocess.check_output('ps auxf | grep "python3 /tmp"', shell=True).decode('utf8'))
 
-    p1 = subprocess.Popen(
-        ['python3', tf.name],
-        universal_newlines=True, stdout=subprocess.PIPE
-    )
-    p2 = subprocess.Popen(
-        ['python3', tf.name],
-        universal_newlines=True, stdout=subprocess.PIPE
-    )
-    time.sleep(1)
+    forker1_children = [c.pid for c in psutil.Process(forker1.pid).children(recursive=True)]
+    forker2_children = [c.pid for c in psutil.Process(forker2.pid).children(recursive=True)]
+    all_pids = [forker1.pid, forker2.pid] + forker1_children + forker2_children
+    random.shuffle(all_pids)
+    for pid in all_pids:
+        _add_to_tarpit(pid, fake_tarpit_dir)
 
-    tempdir = tempfile.mkdtemp()
-    p1_children = [c.pid for c in psutil.Process(p1.pid).children(recursive=True)]
-    p2_children = [c.pid for c in psutil.Process(p2.pid).children(recursive=True)]
-    with open(os.path.join(tempdir, 'tasks'), 'a') as f:
-        f.write(str(p1.pid) + '\n')
-        f.write(str(p2.pid) + '\n')
+    parents = list(hobbler.get_top_level_processes(fake_tarpit_dir))
 
-    for p in p1_children + p2_children:
-        with open(os.path.join(tempdir, 'tasks'), 'a') as f:
-            f.write(str(p) + '\n')
-
-    print(subprocess.check_output('ps auxf | grep python', shell=True).decode('utf8'))
-
-    parents = list(hobbler.get_top_level_processes(tempdir))
     assert len(parents) == 2
-    parent1, parent2 = parents
-    assert {parent1.pid, parent2.pid} == {p1.pid, p2.pid}
-    if parent1.pid == p1.pid:
-        assert parent2.pid == p2.pid
-        assert parent1.children == p1_children
-        assert parent2.children == p2_children
+
+    assert set([parents[0].pid, parents[1].pid]) == {forker1.pid, forker2.pid}
+    if parents[0].pid == forker1.pid:
+        parent1, parent2 = parents
     else:
-        assert parent1.pid == p2.pid
-        assert parent1.children == p2_children
-        assert parent2.children == p1_children
+        parent2, parent1 = parents
+
+    assert parent1.pid == forker1.pid
+    assert parent2.pid == forker2.pid
+    assert parent1.children == forker1_children
+    assert parent2.children == forker2_children
 
