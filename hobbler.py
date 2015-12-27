@@ -57,19 +57,24 @@ def hobble_process_tree(parent):
     print(HOBBLING.format(parent.pid))
     while True:
         try:
-            os.kill(parent.pid, signal.SIGSTOP)
-            for child in parent.children:
-                print(HOBBLING_CHILD.format(child))
-                os.kill(child, signal.SIGSTOP)
-            yield from asyncio.sleep(0.25)
-            for child in reversed(parent.children):
-                os.kill(child, signal.SIGCONT)
-            os.kill(parent.pid, signal.SIGCONT)
-            yield from asyncio.sleep(0.01)
-
+            yield from stop_and_restart(parent)
         except ProcessLookupError:
             print(HOBBLED_PROCESS_DIED.format(parent.pid))
             break
+
+
+@asyncio.coroutine
+def stop_and_restart(parent):
+    os.kill(parent.pid, signal.SIGSTOP)
+    for child in parent.children:
+        print(HOBBLING_CHILD.format(child))
+        os.kill(child, signal.SIGSTOP)
+    yield from asyncio.sleep(0.25)
+    for child in reversed(parent.children):
+        os.kill(child, signal.SIGCONT)
+    os.kill(parent.pid, signal.SIGCONT)
+    yield from asyncio.sleep(0.01)
+
 
 
 @asyncio.coroutine

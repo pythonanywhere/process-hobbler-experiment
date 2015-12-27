@@ -252,3 +252,29 @@ def test_get_top_level_processes_returns_list_of_parents_with_children(fake_tarp
     assert parent1.children == forker1_children
     assert parent2.children == forker2_children
 
+
+import asyncio
+import signal
+from unittest.mock import call, patch
+
+@patch('hobbler.os.kill')
+def test_hobbles_process_tree_in_correct_order(mock_kill):
+    parent = hobbler.TopLevelProcess(
+        'top pid', ['child1', 'child2', 'child3']
+    )
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(
+        hobbler.stop_and_restart(parent)
+    )
+    assert mock_kill.call_args_list == [
+        call('top pid', signal.SIGSTOP),
+        call('child1', signal.SIGSTOP),
+        call('child2', signal.SIGSTOP),
+        call('child3', signal.SIGSTOP),
+        call('child3', signal.SIGCONT),
+        call('child2', signal.SIGCONT),
+        call('child1', signal.SIGCONT),
+        call('top pid', signal.SIGCONT),
+    ]
+
+
