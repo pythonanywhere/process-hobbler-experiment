@@ -55,7 +55,13 @@ def nontesting_hobbler_process(fake_tarpit_dir):
 @pytest.mark.slowtest
 def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
     print('my pid', os.getpid())
-    timer = "import time; time.sleep(0.4); start = time.time(); list(range(int(1e6))); print(time.time() - start)"
+    timer = "; ".join([
+        "import time",
+        "time.sleep(0.4)",  # give hobbler a chance to spot us
+        "start = time.time()",
+        "list(range(int(1e6)))",  # do some work
+        "print(time.time() - start)",
+    ])
     normal = subprocess.check_output(['python', '-c', timer], universal_newlines=True)
     normal = float(normal)
     print("normal", normal)
