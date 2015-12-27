@@ -67,7 +67,6 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
     print("slow", slow)
     assert normal < slow
     assert normal * 10 < slow
-    assert normal * 20 < slow
     assert normal * 100 > slow
 
 
