@@ -1,4 +1,4 @@
 docopt
+psutil
 pytest
 gevent
-
