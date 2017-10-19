@@ -1,4 +1,5 @@
 docopt
 psutil
 pytest
-gevent
+pytest-timeout
+aiofiles

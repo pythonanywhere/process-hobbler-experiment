@@ -1,4 +1,4 @@
-#!/usr/bin/python3.4
+#!/usr/bin/env python
 """A process "hobbler" that uses SIGSTOP and SIGCONT to pause processes for 90%
 of the time, allowing them only a few hundredths of a second of execution time
 in any given second.
@@ -14,94 +14,68 @@ Options:
   --testing             Testing mode (faster loop)
 """
 import asyncio
-from collections import namedtuple
+import aiofiles
 from docopt import docopt
 import os
-import psutil
 import signal
 
 HOBBLING = 'hobbling pid {}'
-HOBBLING_CHILD = 'hobbling child pid {}'
 HOBBLED_PROCESS_DIED = 'hobbled process {} no longer exists'
 
 
-def get_all_pids(cgroup_dir):
-    with open(os.path.join(cgroup_dir, 'tasks')) as f:
-        for line in f.readlines():
+async def get_all_pids(cgroup_dir):
+    async with aiofiles.open(os.path.join(cgroup_dir, 'tasks')) as f:
+        async for line in f:
             try:
                 yield int(line)
             except ValueError:
                 pass
 
-TopLevelProcess = namedtuple('TopLevelProcess', 'pid children')
+to_hobble = set()
 
-
-def get_top_level_processes(cgroup_dir):
-    all_pids = set(get_all_pids(cgroup_dir))
-    top_levels = []
-    for pid in all_pids:
-        try:
-            process = psutil.Process(pid)
-            if process.parent().pid not in all_pids:
-                top_levels.append(TopLevelProcess(
-                    pid,
-                    list(c.pid for c in process.children(recursive=True))
-                ))
-        except psutil.NoSuchProcess:
-            print('task list process {} no longer exists'.format(pid))
-    return top_levels
-
-
-@asyncio.coroutine
-def hobble_process_tree(parent):
-    print(HOBBLING.format(parent.pid))
+async def update_processes_to_hobble(loop, cgroup_dir, tarpit_update_pause):
+    global to_hobble
     while True:
-        try:
-            os.kill(parent.pid, signal.SIGSTOP)
-            for child in parent.children:
-                print(HOBBLING_CHILD.format(child))
-                os.kill(child, signal.SIGSTOP)
-            yield from asyncio.sleep(0.25)
-            for child in reversed(parent.children):
-                os.kill(child, signal.SIGCONT)
-            os.kill(parent.pid, signal.SIGCONT)
-            yield from asyncio.sleep(0.01)
-
-        except ProcessLookupError:
-            print(HOBBLED_PROCESS_DIED.format(parent.pid))
-            break
+        print('updating pid list', flush=True)
+        new_pids = []
+        async for pid in get_all_pids(cgroup_dir):
+            new_pids.append(pid)
+        if not new_pids:
+            print('no pids in', cgroup_dir)
+        else:
+            to_hobble = set(new_pids)
+        await asyncio.sleep(tarpit_update_pause)
 
 
-@asyncio.coroutine
-def hobble_current_processes(loop, already_hobbled, cgroup_dir):
-    print('getting latest process list')
-    parents = get_top_level_processes(cgroup_dir)
-    for parent in parents:
-        if parent.pid in already_hobbled:
-            continue
-        already_hobbled.add(parent.pid)
-        loop.create_task(
-            hobble_process_tree(parent)
-        )
-    print('now hobbling {} processes'.format(len(already_hobbled)))
-
-
-@asyncio.coroutine
-def hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause):
-    already_hobbled = set()
+async def hobble_processes_forever(loop):
+    global to_hobble
+    print('now hobbling {} processes'.format(len(to_hobble)), flush=True)
     while True:
-        print('hobbling...', flush=True)
-        yield from hobble_current_processes(loop, already_hobbled, cgroup_dir)
-        yield from asyncio.sleep(tarpit_update_pause)
+        for pid in to_hobble:
+            try:
+                print(HOBBLING.format(pid))
+                os.kill(pid, signal.SIGSTOP)
+            except ProcessLookupError:
+                print(HOBBLED_PROCESS_DIED.format(pid))
+
+        await asyncio.sleep(0.25)
+
+        for pid in to_hobble:
+            try:
+                os.kill(pid, signal.SIGCONT)
+            except ProcessLookupError:
+                print(HOBBLED_PROCESS_DIED.format(pid))
+        await asyncio.sleep(0.01)
 
 
 def main(cgroup_dir, tarpit_update_pause):
-    print('Starting process hobbler')
+    print('Starting process hobbler', flush=True)
     loop = asyncio.get_event_loop()
-    if not hasattr(loop, 'create_task'):  # was added in 3.4.2
-        loop.create_task = asyncio.async
     loop.create_task(
-        hobble_processes_forever(loop, cgroup_dir, tarpit_update_pause)
+        update_processes_to_hobble(loop, cgroup_dir, tarpit_update_pause)
+    )
+    loop.create_task(
+        hobble_processes_forever(loop)
     )
     loop.run_forever()
     loop.close()

@@ -1,8 +1,6 @@
 import os
-import inspect
 import psutil
 import pytest
-import random
 import shutil
 import subprocess
 import tempfile
@@ -11,7 +9,7 @@ import time
 
 import hobbler
 
-@pytest.yield_fixture
+@pytest.fixture
 def fake_tarpit_dir():
     tempdir = tempfile.mkdtemp()
     open(os.path.join(tempdir, 'tasks'), 'w').close()
@@ -34,7 +32,7 @@ def _get_hobbler_process(fake_tarpit_dir, testing):
     return process
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def hobbler_process(fake_tarpit_dir):
     process = _get_hobbler_process(fake_tarpit_dir, testing=True)
     yield process
@@ -43,7 +41,7 @@ def hobbler_process(fake_tarpit_dir):
     print(process.stdout.read())
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def nontesting_hobbler_process(fake_tarpit_dir):
     process = _get_hobbler_process(fake_tarpit_dir, testing=False)
     yield process
@@ -89,6 +87,7 @@ def test_spots_process(fake_tarpit_dir, hobbler_process):
     lines = []
     for _ in range(10):
         line = hobbler_process.stdout.readline().strip()
+        print(line)
         lines.append(line)
         if line == hobbler.HOBBLING.format(pid):
             break
@@ -108,6 +107,7 @@ def test_spots_multiple_processes(fake_tarpit_dir, hobbler_process):
     lines = []
     for _ in range(20):
         line = hobbler_process.stdout.readline().strip()
+        print(line)
         lines.append(line)
 
     assert hobbler.HOBBLING.format(pid1) in lines
@@ -148,6 +148,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, hobbler_process):
 
     p.kill()
     p.wait()
+    time.sleep(1)
 
     for _ in range(10):
         line = hobbler_process.stdout.readline().strip()
@@ -170,37 +171,7 @@ def _forker():
     time.sleep(4)
 
 
-def _get_forkey_process_tree():
-    tf = tempfile.NamedTemporaryFile(delete=False)
-    with tf:
-        tf.write(inspect.getsource(_forker).encode('utf8'))
-        tf.write('\n_forker()\n'.encode('utf8'))
-    toplevel = subprocess.Popen(
-        ['python3', tf.name],
-        universal_newlines=True, stdout=subprocess.PIPE
-    )
-    while len(psutil.Process(toplevel.pid).children(recursive=True)) < 7:
-        time.sleep(0.1)
-    os.remove(tf.name)
-    return toplevel
 
-
-
-def test_hobbles_children(fake_tarpit_dir, hobbler_process):
-    forker = _get_forkey_process_tree()
-    _add_to_tarpit(forker.pid, fake_tarpit_dir)
-    children = psutil.Process(forker.pid).children(recursive=True)
-
-    lines = []
-    for _ in range(20):
-        line = hobbler_process.stdout.readline().strip()
-        lines.append(line)
-
-    for c in children:
-        assert hobbler.HOBBLING_CHILD.format(c.pid) in lines
-
-    forker.kill()
-    forker.wait()
 
 
 @pytest.mark.slowtest
@@ -223,32 +194,4 @@ def test_lots_of_processes(fake_tarpit_dir, nontesting_hobbler_process):
 
     psutil.Process(nontesting_hobbler_process.pid).cpu_percent(interval=0.1)  # warm-up
     assert psutil.Process(nontesting_hobbler_process.pid).cpu_percent(interval=2) < 10
-
-
-def test_get_top_level_processes_returns_list_of_parents_with_children(fake_tarpit_dir):
-    forker1 = _get_forkey_process_tree()
-    forker2 = _get_forkey_process_tree()
-    print(subprocess.check_output('ps auxf | grep "python3 /tmp"', shell=True).decode('utf8'))
-
-    forker1_children = [c.pid for c in psutil.Process(forker1.pid).children(recursive=True)]
-    forker2_children = [c.pid for c in psutil.Process(forker2.pid).children(recursive=True)]
-    all_pids = [forker1.pid, forker2.pid] + forker1_children + forker2_children
-    random.shuffle(all_pids)
-    for pid in all_pids:
-        _add_to_tarpit(pid, fake_tarpit_dir)
-
-    parents = list(hobbler.get_top_level_processes(fake_tarpit_dir))
-
-    assert len(parents) == 2
-
-    assert set([parents[0].pid, parents[1].pid]) == {forker1.pid, forker2.pid}
-    if parents[0].pid == forker1.pid:
-        parent1, parent2 = parents
-    else:
-        parent2, parent1 = parents
-
-    assert parent1.pid == forker1.pid
-    assert parent2.pid == forker2.pid
-    assert parent1.children == forker1_children
-    assert parent2.children == forker2_children
 
