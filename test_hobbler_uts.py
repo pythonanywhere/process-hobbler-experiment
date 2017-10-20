@@ -16,15 +16,10 @@ def fake_tarpit_dir():
     shutil.rmtree(tempdir)
 
 
-def _add_to_tarpit(pid, tarpit_dir):
-    with open(os.path.join(tarpit_dir, 'tasks'), 'a') as f:
-        f.write(str(pid) + '\n')
-
-
 @pytest.mark.asyncio
-async def test_get_all_pids(fake_tarpit_dir):
-    _add_to_tarpit(123, fake_tarpit_dir)
-    _add_to_tarpit(124, fake_tarpit_dir)
+async def test_get_all_pids(fake_tarpit_pid, fake_tarpit_dir):
+    fake_tarpit_pid(123)
+    fake_tarpit_pid(124)
     pids = await hobbler.get_all_pids(fake_tarpit_dir)
     assert pids == {123, 124}
 
@@ -36,10 +31,12 @@ async def test_get_all_pids_when_empty(fake_tarpit_dir):
 
 
 @pytest.mark.asyncio
-async def test_update_processes_to_hobble_adds_to_queue(fake_tarpit_dir):
+async def test_update_processes_to_hobble_adds_to_queue(
+    fake_tarpit_pid, fake_tarpit_dir
+):
     queue = asyncio.queues.LifoQueue()
-    _add_to_tarpit(1, fake_tarpit_dir)
-    _add_to_tarpit(2, fake_tarpit_dir)
+    fake_tarpit_pid(1)
+    fake_tarpit_pid(2)
     await hobbler.update_processes_to_hobble(fake_tarpit_dir, queue)
     latest_pids = queue.get_nowait()
     assert latest_pids == {1, 2}

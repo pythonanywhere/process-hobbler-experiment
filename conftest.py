@@ -1,12 +1,8 @@
-from unittest.mock import MagicMock, call
-import asyncio
 import os
-import psutil
 import pytest
 import shutil
 import subprocess
 import tempfile
-import time
 
 import hobbler
 
@@ -20,9 +16,11 @@ def fake_tarpit_dir():
 
 
 @pytest.fixture
-def add_to_tarpit(pid, fake_tarpit_dir):
-    with open(os.path.join(fake_tarpit_dir, 'tasks'), 'a') as f:
-        f.write(str(pid) + '\n')
+def fake_tarpit_pid(fake_tarpit_dir):
+    def add_pid_to_fake_tarpit(pid):
+        with open(os.path.join(fake_tarpit_dir, 'tasks'), 'a') as f:
+            f.write(str(pid) + '\n')
+    return add_pid_to_fake_tarpit
 
 
 def _get_hobbler_process(fake_tarpit_dir, testing):

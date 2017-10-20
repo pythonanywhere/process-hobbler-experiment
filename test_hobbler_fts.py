@@ -7,9 +7,6 @@ import time
 import hobbler
 
 
-def _add_to_tarpit(pid, tarpit_dir):
-    with open(os.path.join(tarpit_dir, 'tasks'), 'a') as f:
-        f.write(str(pid) + '\n')
 
 
 @pytest.mark.slowtest
@@ -37,10 +34,10 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
 
 
 
-def test_spots_process(fake_tarpit_dir, hobbler_process):
+def test_spots_process(fake_tarpit_pid, hobbler_process):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = sleeper.pid
-    _add_to_tarpit(pid, fake_tarpit_dir)
+    fake_tarpit_pid(pid)
     lines = []
     for _ in range(10):
         line = hobbler_process.stdout.readline().strip()
@@ -53,13 +50,13 @@ def test_spots_process(fake_tarpit_dir, hobbler_process):
     sleeper.kill()
 
 
-def test_spots_multiple_processes(fake_tarpit_dir, hobbler_process):
+def test_spots_multiple_processes(fake_tarpit_pid, hobbler_process):
     sleeper1 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     sleeper2 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid1 = str(sleeper1.pid)
     pid2 = str(sleeper2.pid)
-    _add_to_tarpit(pid1, fake_tarpit_dir)
-    _add_to_tarpit(pid2, fake_tarpit_dir)
+    fake_tarpit_pid(pid1)
+    fake_tarpit_pid(pid2)
 
     lines = []
     for _ in range(20):
@@ -74,7 +71,9 @@ def test_spots_multiple_processes(fake_tarpit_dir, hobbler_process):
     sleeper2.kill()
 
 
-def test_doesnt_hobble_any_old_process(fake_tarpit_dir, hobbler_process):
+def test_doesnt_hobble_any_old_process(
+    fake_tarpit_dir, hobbler_process
+):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(sleeper.pid)
     lines = []
@@ -86,10 +85,12 @@ def test_doesnt_hobble_any_old_process(fake_tarpit_dir, hobbler_process):
     sleeper.kill()
 
 
-def test_stops_hobbling_dead_processes(fake_tarpit_dir, hobbler_process):
+def test_stops_hobbling_dead_processes(
+    fake_tarpit_pid, hobbler_process
+):
     p = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(p.pid)
-    _add_to_tarpit(pid, fake_tarpit_dir)
+    fake_tarpit_pid(pid)
 
     hobbling = hobbler.HOBBLING.format(pid)
     stopped = hobbler.HOBBLED_PROCESS_DIED.format(pid)
@@ -130,13 +131,13 @@ def _forker():
 
 
 @pytest.mark.slowtest
-def test_lots_of_processes(fake_tarpit_dir, nontesting_hobbler_process):
+def test_lots_of_processes(fake_tarpit_pid, nontesting_hobbler_process):
     start_times = psutil.Process(nontesting_hobbler_process.pid).cpu_times()
     print('start times', start_times)
     procs = []
     for i in range(200):
         p = subprocess.Popen(['sleep', '100'], universal_newlines=True)
-        _add_to_tarpit(p.pid, fake_tarpit_dir)
+        fake_tarpit_pid(p.pid)
         procs.append(p)
 
     time.sleep(7) # time for 3 iterations
