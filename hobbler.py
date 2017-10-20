@@ -43,13 +43,10 @@ def _empty_queue(queue):
 
 
 async def update_processes_to_hobble(cgroup_dir, queue):
-    print('updating pid list', flush=True)
+    print('updating pid list')
     new_pids = await get_all_pids(cgroup_dir)
-    if new_pids:
-        _empty_queue(queue)
-        await queue.put(new_pids)
-    else:
-        print('no pids in', cgroup_dir, flush=True)
+    _empty_queue(queue)
+    await queue.put(new_pids)
 
 
 
@@ -60,18 +57,31 @@ async def keep_polling_processes_to_hobble(cgroup_dir, queue, tarpit_update_paus
 
 
 
-def _stop_process(pid):
+def pause_process(pid):
     try:
-        print(HOBBLING.format(pid))
+        print(HOBBLING.format(pid), flush=True)
         os.kill(pid, signal.SIGSTOP)
     except ProcessLookupError:
-        print(HOBBLED_PROCESS_DIED.format(pid))
+        print(HOBBLED_PROCESS_DIED.format(pid), flush=True)
 
-def _restart_process(pid):
+
+def restart_process(pid):
     try:
         os.kill(pid, signal.SIGCONT)
     except ProcessLookupError:
-        print(HOBBLED_PROCESS_DIED.format(pid))
+        print(HOBBLED_PROCESS_DIED.format(pid), flush=True)
+
+
+
+async def hobble_processes(pids):
+    for pid in pids:
+        pause_process(pid)
+    await asyncio.sleep(0.25)
+    for pid in pids:
+        restart_process(pid)
+    await asyncio.sleep(0.01)
+
+
 
 
 async def hobble_processes_forever(queue):
@@ -85,13 +95,7 @@ async def hobble_processes_forever(queue):
         except asyncio.queues.QueueEmpty:
             print('sticking with old list of processes', to_hobble)
             pass
-
-        for pid in to_hobble:
-            _stop_process(pid)
-        await asyncio.sleep(0.25)
-        for pid in to_hobble:
-            _restart_process(pid)
-        await asyncio.sleep(0.01)
+        await hobble_processes(to_hobble)
 
 
 def main(cgroup_dir, tarpit_update_pause):

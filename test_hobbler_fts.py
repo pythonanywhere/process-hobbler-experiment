@@ -1,53 +1,15 @@
 import os
 import psutil
 import pytest
-import shutil
 import subprocess
-import tempfile
 import time
-
 
 import hobbler
 
-@pytest.fixture
-def fake_tarpit_dir():
-    tempdir = tempfile.mkdtemp()
-    open(os.path.join(tempdir, 'tasks'), 'w').close()
-    yield tempdir
-    shutil.rmtree(tempdir)
 
-
-
-def _get_hobbler_process(fake_tarpit_dir, testing):
-    command = [hobbler.__file__, fake_tarpit_dir]
-    if testing:
-        command.append('--testing')
-    process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
-        stderr=subprocess.STDOUT, universal_newlines=True
-    )
-    first_line = process.stdout.readline()
-    if 'Traceback' in first_line:
-        assert False, process.stdout.read()
-    return process
-
-
-@pytest.fixture
-def hobbler_process(fake_tarpit_dir):
-    process = _get_hobbler_process(fake_tarpit_dir, testing=True)
-    yield process
-    process.kill()
-    print('full hobbler process output:')
-    print(process.stdout.read())
-
-
-@pytest.fixture
-def nontesting_hobbler_process(fake_tarpit_dir):
-    process = _get_hobbler_process(fake_tarpit_dir, testing=False)
-    yield process
-    process.kill()
-    print('full hobbler process output:')
-    print(process.stdout.read())
+def _add_to_tarpit(pid, tarpit_dir):
+    with open(os.path.join(tarpit_dir, 'tasks'), 'a') as f:
+        f.write(str(pid) + '\n')
 
 
 @pytest.mark.slowtest
@@ -72,38 +34,6 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
     assert normal < slow
     assert normal * 10 < slow
     assert normal * 100 > slow
-
-
-
-def _add_to_tarpit(pid, tarpit_dir):
-    with open(os.path.join(tarpit_dir, 'tasks'), 'a') as f:
-        f.write(str(pid) + '\n')
-
-
-@pytest.mark.asyncio
-async def test_get_all_pids(fake_tarpit_dir):
-    _add_to_tarpit(123, fake_tarpit_dir)
-    _add_to_tarpit(124, fake_tarpit_dir)
-    pids = await hobbler.get_all_pids(fake_tarpit_dir)
-    assert pids == {123, 124}
-
-
-@pytest.mark.asyncio
-async def test_get_all_pids_when_empty(fake_tarpit_dir):
-    pids = await hobbler.get_all_pids(fake_tarpit_dir)
-    assert pids == set()
-
-
-import asyncio
-
-@pytest.mark.asyncio
-async def test_update_processes_to_hobble_adds_to_queue(fake_tarpit_dir):
-    queue = asyncio.queues.LifoQueue()
-    _add_to_tarpit(1, fake_tarpit_dir)
-    _add_to_tarpit(2, fake_tarpit_dir)
-    await hobbler.update_processes_to_hobble(fake_tarpit_dir, queue)
-    latest_pids = queue.get_nowait()
-    assert latest_pids == {1, 2}
 
 
 
@@ -175,6 +105,7 @@ def test_stops_hobbling_dead_processes(fake_tarpit_dir, hobbler_process):
 
     p.kill()
     p.wait()
+    hobbler_process.stdout.read()
     time.sleep(1)
 
     for _ in range(10):
@@ -196,9 +127,6 @@ def _forker():
         print(os.getpid(), flush=True)
         os.fork()
     time.sleep(4)
-
-
-
 
 
 @pytest.mark.slowtest
