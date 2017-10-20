@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock
 import os
 import pytest
 import shutil
@@ -60,4 +61,12 @@ def nontesting_hobbler_process(fake_tarpit_dir, monkeypatch):
     process.kill()
     print('full hobbler process output:')
     print(process.stdout.read())
+
+
+@pytest.fixture
+def mocked_pid_ops(monkeypatch):
+    mock = MagicMock()
+    monkeypatch.setattr(hobbler, 'pause_process', mock.pause_process)
+    monkeypatch.setattr(hobbler, 'restart_process', mock.restart_process)
+    return mock
 

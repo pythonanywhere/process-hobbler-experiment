@@ -34,41 +34,39 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
 
 
 
-def test_spots_process(fake_tarpit_pid, hobbler_process):
-    sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
-    pid = sleeper.pid
-    fake_tarpit_pid(pid)
+def _wait_for_hobbling_message(hobbler_process, pids):
     lines = []
     for _ in range(10):
         line = hobbler_process.stdout.readline().strip()
         print(line)
         lines.append(line)
-        if line == hobbler.HOBBLING.format(pid):
+        if line == hobbler.HOBBLING_PIDS_MSG.format(pids):
             break
     else:
-        assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
+        output = '\n'.join(lines)
+        assert False, f'never hobbled pids {pids}. output was:\n{output}'
+    return lines
+
+
+def test_spots_process(fake_tarpit_pid, hobbler_process):
+    sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
+    pid = sleeper.pid
+    fake_tarpit_pid(pid)
+    _wait_for_hobbling_message(hobbler_process, {pid})
     sleeper.kill()
 
 
 def test_spots_multiple_processes(fake_tarpit_pid, hobbler_process):
     sleeper1 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     sleeper2 = subprocess.Popen(['sleep', '10'], universal_newlines=True)
-    pid1 = str(sleeper1.pid)
-    pid2 = str(sleeper2.pid)
+    pid1 = sleeper1.pid
+    pid2 = sleeper2.pid
     fake_tarpit_pid(pid1)
     fake_tarpit_pid(pid2)
-
-    lines = []
-    for _ in range(20):
-        line = hobbler_process.stdout.readline().strip()
-        print(line)
-        lines.append(line)
-
-    assert hobbler.HOBBLING.format(pid1) in lines
-    assert hobbler.HOBBLING.format(pid2) in lines
-
+    _wait_for_hobbling_message(hobbler_process, {pid1, pid2})
     sleeper1.kill()
     sleeper2.kill()
+
 
 
 def test_doesnt_hobble_any_old_process(
@@ -81,7 +79,7 @@ def test_doesnt_hobble_any_old_process(
         line = hobbler_process.stdout.readline().strip()
         lines.append(line)
 
-    assert hobbler.HOBBLING.format(pid) not in lines
+    assert hobbler.HOBBLING_PIDS_MSG.format({pid}) not in lines
     sleeper.kill()
 
 
@@ -89,20 +87,11 @@ def test_stops_hobbling_dead_processes(
     fake_tarpit_pid, empty_fake_tarpit, hobbler_process,
 ):
     p = subprocess.Popen(['sleep', '10'], universal_newlines=True)
-    pid = str(p.pid)
-    fake_tarpit_pid(pid)
+    fake_tarpit_pid(p.pid)
 
-    hobbling = hobbler.HOBBLING.format(pid)
-    stopped = hobbler.HOBBLED_PROCESS_DIED.format(pid)
-
-    lines = []
-    for _ in range(10):
-        line = hobbler_process.stdout.readline().strip()
-        lines.append(line)
-        if line == hobbling:
-            break
-    else:
-        assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
+    hobbling = hobbler.HOBBLING_PIDS_MSG.format({p.pid})
+    stopped = hobbler.HOBBLED_PROCESS_DIED.format(p.pid)
+    lines = _wait_for_hobbling_message(hobbler_process, {p.pid})
 
     p.kill()
     print('emptying tarpit')
@@ -113,7 +102,7 @@ def test_stops_hobbling_dead_processes(
         line = hobbler_process.stdout.readline().strip()
         lines.append(line)
 
-    print('\n'.join(lines))
+    # TODO: this test is flakey, improve
     assert hobbling in lines
     assert stopped in lines
     assert lines.count(hobbling) == 1

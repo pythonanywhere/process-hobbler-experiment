@@ -19,8 +19,8 @@ from docopt import docopt
 import os
 import signal
 
-HOBBLING = 'hobbling pid {}'
 HOBBLED_PROCESS_DIED = 'hobbled process {} no longer exists'
+HOBBLING_PIDS_MSG = 'hobbling pids: {}'
 
 
 async def get_all_pids(cgroup_dir):
@@ -43,8 +43,8 @@ def _empty_queue(queue):
 
 
 async def update_processes_to_hobble(cgroup_dir, queue):
-    print('updating pid list')
     new_pids = await get_all_pids(cgroup_dir)
+    print(f'updating pid list; hobbling {new_pids}')
     _empty_queue(queue)
     await queue.put(new_pids)
 
@@ -59,7 +59,6 @@ async def keep_polling_processes_to_hobble(cgroup_dir, queue, tarpit_update_paus
 
 def pause_process(pid):
     try:
-        print(HOBBLING.format(pid))
         os.kill(pid, signal.SIGSTOP)
     except ProcessLookupError:
         print(HOBBLED_PROCESS_DIED.format(pid))
@@ -73,7 +72,9 @@ def restart_process(pid):
 
 
 
-async def hobble_processes(pids):
+async def hobble_processes(pids, test_mode):
+    if test_mode:
+        print(HOBBLING_PIDS_MSG.format(pids))
     for pid in pids:
         pause_process(pid)
     await asyncio.sleep(0.25)
@@ -84,29 +85,31 @@ async def hobble_processes(pids):
 
 
 
-async def hobble_processes_forever(queue):
+async def hobble_processes_forever(queue, test_mode):
     print('first get on queue')
     to_hobble = await queue.get()
     print('off we go a-hobblin!', to_hobble)
     while True:
         try:
             to_hobble = queue.get_nowait()
-            print('got new processes to hobble', to_hobble)
+            if test_mode:
+                print('got new processes to hobble', to_hobble)
         except asyncio.queues.QueueEmpty:
-            print('sticking with old list of processes', to_hobble)
-            pass
-        await hobble_processes(to_hobble)
+            if test_mode:
+                print('sticking with old list of processes', to_hobble)
+        await hobble_processes(to_hobble, test_mode)
 
 
-def main(cgroup_dir, tarpit_update_pause):
+def main(cgroup_dir, test_mode):
     print('Starting process hobbler')
     loop = asyncio.get_event_loop()
     queue = asyncio.queues.LifoQueue()
+    tarpit_update_pause = 0.3 if test_mode else 2
     loop.create_task(
         keep_polling_processes_to_hobble(cgroup_dir, queue, tarpit_update_pause)
     )
     loop.create_task(
-        hobble_processes_forever(queue)
+        hobble_processes_forever(queue, test_mode)
     )
     loop.run_forever()
     loop.close()
@@ -116,6 +119,5 @@ if __name__ == '__main__':
     args = docopt(__doc__)
     cgroup = args['<cgroup_dir>']  # doesnt have to be a real cgroup, just needs to contain a file called "tasks" with a list of pids in it
     assert os.path.exists(os.path.join(cgroup, 'tasks'))
-    pause = 2 if not args.get('--testing') else 0.3
-    main(cgroup, pause)
+    main(cgroup, args.get('--testing'))
 
