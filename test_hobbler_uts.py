@@ -59,13 +59,13 @@ async def test_hobble_processes_does_all_pids_on_queue(
 
 @pytest.mark.asyncio
 async def test_hobble_processes_prints_in_test_mode(
-    fake_tarpit_dir, mocked_pid_ops, capsys
+    fake_tarpit_dir, mocked_pid_ops, capfd
 ):
     pids = [10, 11, 12]
     await hobbler.hobble_processes(pids, test_mode=False)
-    assert hobbler.HOBBLING_PIDS_MSG.format(pids) not in capsys.readouterr()[0]
+    assert hobbler.HOBBLING_PIDS_MSG.format(pids) not in capfd.readouterr()[0]
     await hobbler.hobble_processes(pids, test_mode=True)
-    assert hobbler.HOBBLING_PIDS_MSG.format(pids) in capsys.readouterr()[0]
+    assert hobbler.HOBBLING_PIDS_MSG.format(pids) in capfd.readouterr()[0]
 
 
 

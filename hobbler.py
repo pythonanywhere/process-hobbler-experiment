@@ -44,7 +44,7 @@ def _empty_queue(queue):
 
 async def update_processes_to_hobble(cgroup_dir, queue):
     new_pids = await get_all_pids(cgroup_dir)
-    print(f'updating pid list; hobbling {new_pids}')
+    print(f'updating pid list; hobbling {new_pids}', flush=True)
     _empty_queue(queue)
     await queue.put(new_pids)
 
@@ -74,7 +74,7 @@ def restart_process(pid):
 
 async def hobble_processes(pids, test_mode):
     if test_mode:
-        print(HOBBLING_PIDS_MSG.format(pids))
+        print(HOBBLING_PIDS_MSG.format(pids, flush=True))
     for pid in pids:
         pause_process(pid)
     await asyncio.sleep(0.25)
@@ -101,7 +101,7 @@ async def hobble_processes_forever(queue, test_mode):
 
 
 def main(cgroup_dir, test_mode):
-    print('Starting process hobbler')
+    print('Starting process hobbler', flush=True)
     loop = asyncio.get_event_loop()
     queue = asyncio.queues.LifoQueue()
     tarpit_update_pause = 0.3 if test_mode else 2

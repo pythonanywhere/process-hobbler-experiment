@@ -29,38 +29,40 @@ def empty_fake_tarpit(fake_tarpit_dir):
     return lambda: open(os.path.join(fake_tarpit_dir, 'tasks'), 'w').close()
 
 
-def _get_hobbler_process(fake_tarpit_dir, testing):
+def _get_hobbler_process(fake_tarpit_dir, tmpdir, testing):
     command = [hobbler.__file__, fake_tarpit_dir]
+    out = tmpdir.join('out')
     if testing:
         command.append('--testing')
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
+        command, stdout=out.open('w'), stdin=subprocess.PIPE,
         stderr=subprocess.STDOUT, universal_newlines=True,
     )
-    first_line = process.stdout.readline()
+    process.output = out
+    first_line = process.output.open().readline()
     if 'Traceback' in first_line:
-        assert False, process.stdout.read()
+        assert False, process.output.read()
     return process
 
 
-@pytest.fixture
-def hobbler_process(fake_tarpit_dir, monkeypatch):
-    monkeypatch.setenv('PYTHONUNBUFFERED', '1')
-    process = _get_hobbler_process(fake_tarpit_dir, testing=True)
-    yield process
+def _tidy_process(process):
     process.kill()
-    print('full hobbler process output:')
-    print(process.stdout.read())
+    print('hobbler output:')
+    print(process.output.read())
 
 
 @pytest.fixture
-def nontesting_hobbler_process(fake_tarpit_dir, monkeypatch):
-    monkeypatch.setenv('PYTHONUNBUFFERED', '1')
-    process = _get_hobbler_process(fake_tarpit_dir, testing=False)
+def hobbler_process(fake_tarpit_dir, tmpdir):
+    process = _get_hobbler_process(fake_tarpit_dir, tmpdir, testing=True)
     yield process
-    process.kill()
-    print('full hobbler process output:')
-    print(process.stdout.read())
+    _tidy_process(process)
+
+
+@pytest.fixture
+def nontesting_hobbler_process(fake_tarpit_dir, tmpdir):
+    process = _get_hobbler_process(fake_tarpit_dir, tmpdir, testing=False)
+    yield process
+    _tidy_process(process)
 
 
 @pytest.fixture
