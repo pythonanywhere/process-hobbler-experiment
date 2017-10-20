@@ -86,7 +86,7 @@ def test_doesnt_hobble_any_old_process(
 
 
 def test_stops_hobbling_dead_processes(
-    fake_tarpit_pid, hobbler_process
+    fake_tarpit_pid, empty_fake_tarpit, hobbler_process,
 ):
     p = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = str(p.pid)
@@ -105,9 +105,9 @@ def test_stops_hobbling_dead_processes(
         assert False, 'never hobbled pid {}. output was:\n{}'.format(pid, ''.join(lines))
 
     p.kill()
+    print('emptying tarpit')
+    empty_fake_tarpit()
     p.wait()
-    hobbler_process.stdout.read()
-    time.sleep(1)
 
     for _ in range(10):
         line = hobbler_process.stdout.readline().strip()

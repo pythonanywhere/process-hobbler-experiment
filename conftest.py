@@ -23,13 +23,18 @@ def fake_tarpit_pid(fake_tarpit_dir):
     return add_pid_to_fake_tarpit
 
 
+@pytest.fixture
+def empty_fake_tarpit(fake_tarpit_dir):
+    return lambda: open(os.path.join(fake_tarpit_dir, 'tasks'), 'w').close()
+
+
 def _get_hobbler_process(fake_tarpit_dir, testing):
     command = [hobbler.__file__, fake_tarpit_dir]
     if testing:
         command.append('--testing')
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
-        stderr=subprocess.STDOUT, universal_newlines=True
+        stderr=subprocess.STDOUT, universal_newlines=True,
     )
     first_line = process.stdout.readline()
     if 'Traceback' in first_line:
@@ -38,7 +43,8 @@ def _get_hobbler_process(fake_tarpit_dir, testing):
 
 
 @pytest.fixture
-def hobbler_process(fake_tarpit_dir):
+def hobbler_process(fake_tarpit_dir, monkeypatch):
+    monkeypatch.setenv('PYTHONUNBUFFERED', '1')
     process = _get_hobbler_process(fake_tarpit_dir, testing=True)
     yield process
     process.kill()
@@ -47,7 +53,8 @@ def hobbler_process(fake_tarpit_dir):
 
 
 @pytest.fixture
-def nontesting_hobbler_process(fake_tarpit_dir):
+def nontesting_hobbler_process(fake_tarpit_dir, monkeypatch):
+    monkeypatch.setenv('PYTHONUNBUFFERED', '1')
     process = _get_hobbler_process(fake_tarpit_dir, testing=False)
     yield process
     process.kill()

@@ -59,17 +59,17 @@ async def keep_polling_processes_to_hobble(cgroup_dir, queue, tarpit_update_paus
 
 def pause_process(pid):
     try:
-        print(HOBBLING.format(pid), flush=True)
+        print(HOBBLING.format(pid))
         os.kill(pid, signal.SIGSTOP)
     except ProcessLookupError:
-        print(HOBBLED_PROCESS_DIED.format(pid), flush=True)
+        print(HOBBLED_PROCESS_DIED.format(pid))
 
 
 def restart_process(pid):
     try:
         os.kill(pid, signal.SIGCONT)
     except ProcessLookupError:
-        print(HOBBLED_PROCESS_DIED.format(pid), flush=True)
+        print(HOBBLED_PROCESS_DIED.format(pid))
 
 
 
@@ -99,7 +99,7 @@ async def hobble_processes_forever(queue):
 
 
 def main(cgroup_dir, tarpit_update_pause):
-    print('Starting process hobbler', flush=True)
+    print('Starting process hobbler')
     loop = asyncio.get_event_loop()
     queue = asyncio.queues.LifoQueue()
     loop.create_task(
