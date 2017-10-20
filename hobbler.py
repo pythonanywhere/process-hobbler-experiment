@@ -24,33 +24,47 @@ HOBBLED_PROCESS_DIED = 'hobbled process {} no longer exists'
 
 
 async def get_all_pids(cgroup_dir):
+    pids = set()
     async with aiofiles.open(os.path.join(cgroup_dir, 'tasks')) as f:
         async for line in f:
             try:
-                yield int(line)
+                pids.add(int(line))
             except ValueError:
                 pass
+    return pids
 
-to_hobble = set()
+queue = asyncio.queues.LifoQueue()
+
+def _empty_queue():
+    while True:
+        try:
+            queue.get_nowait()
+        except asyncio.queues.QueueEmpty:
+            return
 
 async def update_processes_to_hobble(loop, cgroup_dir, tarpit_update_pause):
-    global to_hobble
     while True:
         print('updating pid list', flush=True)
-        new_pids = []
-        async for pid in get_all_pids(cgroup_dir):
-            new_pids.append(pid)
+        new_pids = await get_all_pids(cgroup_dir)
         if not new_pids:
             print('no pids in', cgroup_dir)
         else:
-            to_hobble = set(new_pids)
+            _empty_queue()
+            queue.put(set(new_pids))
         await asyncio.sleep(tarpit_update_pause)
 
 
 async def hobble_processes_forever(loop):
-    global to_hobble
-    print('now hobbling {} processes'.format(len(to_hobble)), flush=True)
+    print('first get on queue')
+    to_hobble = await queue.get()
+    print('off we go a-hobblin!', to_hobble)
     while True:
+        try:
+            to_hobble = queue.get_nowait()
+            print('got new processes to hobble', to_hobble)
+        except asyncio.queues.QueueEmpty:
+            print('sticking with old list of processes', to_hobble)
+            pass
         for pid in to_hobble:
             try:
                 print(HOBBLING.format(pid))

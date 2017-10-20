@@ -80,6 +80,22 @@ def _add_to_tarpit(pid, tarpit_dir):
         f.write(str(pid) + '\n')
 
 
+@pytest.mark.asyncio
+async def test_get_all_pids(fake_tarpit_dir):
+    _add_to_tarpit(123, fake_tarpit_dir)
+    _add_to_tarpit(124, fake_tarpit_dir)
+    pids = await hobbler.get_all_pids(fake_tarpit_dir)
+    assert list(pids) == [123, 124]
+
+
+@pytest.mark.asyncio
+async def test_get_all_pids_when_empty(fake_tarpit_dir):
+    pids = await hobbler.get_all_pids(fake_tarpit_dir)
+    assert list(pids) == []
+
+
+
+
 def test_spots_process(fake_tarpit_dir, hobbler_process):
     sleeper = subprocess.Popen(['sleep', '10'], universal_newlines=True)
     pid = sleeper.pid
