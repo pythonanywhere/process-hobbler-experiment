@@ -85,14 +85,25 @@ async def test_get_all_pids(fake_tarpit_dir):
     _add_to_tarpit(123, fake_tarpit_dir)
     _add_to_tarpit(124, fake_tarpit_dir)
     pids = await hobbler.get_all_pids(fake_tarpit_dir)
-    assert list(pids) == [123, 124]
+    assert pids == {123, 124}
 
 
 @pytest.mark.asyncio
 async def test_get_all_pids_when_empty(fake_tarpit_dir):
     pids = await hobbler.get_all_pids(fake_tarpit_dir)
-    assert list(pids) == []
+    assert pids == set()
 
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_update_processes_to_hobble_adds_to_queue(fake_tarpit_dir):
+    queue = asyncio.queues.LifoQueue()
+    _add_to_tarpit(1, fake_tarpit_dir)
+    _add_to_tarpit(2, fake_tarpit_dir)
+    await hobbler.update_processes_to_hobble(fake_tarpit_dir, queue)
+    latest_pids = queue.get_nowait()
+    assert latest_pids == {1, 2}
 
 
 

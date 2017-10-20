@@ -33,28 +33,48 @@ async def get_all_pids(cgroup_dir):
                 pass
     return pids
 
-queue = asyncio.queues.LifoQueue()
 
-def _empty_queue():
+def _empty_queue(queue):
     while True:
         try:
             queue.get_nowait()
         except asyncio.queues.QueueEmpty:
             return
 
-async def update_processes_to_hobble(loop, cgroup_dir, tarpit_update_pause):
+
+async def update_processes_to_hobble(cgroup_dir, queue):
+    print('updating pid list', flush=True)
+    new_pids = await get_all_pids(cgroup_dir)
+    if new_pids:
+        _empty_queue(queue)
+        await queue.put(new_pids)
+    else:
+        print('no pids in', cgroup_dir, flush=True)
+
+
+
+async def keep_polling_processes_to_hobble(cgroup_dir, queue, tarpit_update_pause):
     while True:
-        print('updating pid list', flush=True)
-        new_pids = await get_all_pids(cgroup_dir)
-        if not new_pids:
-            print('no pids in', cgroup_dir)
-        else:
-            _empty_queue()
-            queue.put(set(new_pids))
+        await update_processes_to_hobble(cgroup_dir, queue)
         await asyncio.sleep(tarpit_update_pause)
 
 
-async def hobble_processes_forever(loop):
+
+def _stop_process(pid):
+    try:
+        print(HOBBLING.format(pid))
+        os.kill(pid, signal.SIGSTOP)
+    except ProcessLookupError:
+        print(HOBBLED_PROCESS_DIED.format(pid))
+
+def _restart_process(pid):
+    try:
+        os.kill(pid, signal.SIGCONT)
+    except ProcessLookupError:
+        print(HOBBLED_PROCESS_DIED.format(pid))
+
+
+async def hobble_processes_forever(queue):
     print('first get on queue')
     to_hobble = await queue.get()
     print('off we go a-hobblin!', to_hobble)
@@ -65,31 +85,24 @@ async def hobble_processes_forever(loop):
         except asyncio.queues.QueueEmpty:
             print('sticking with old list of processes', to_hobble)
             pass
-        for pid in to_hobble:
-            try:
-                print(HOBBLING.format(pid))
-                os.kill(pid, signal.SIGSTOP)
-            except ProcessLookupError:
-                print(HOBBLED_PROCESS_DIED.format(pid))
 
+        for pid in to_hobble:
+            _stop_process(pid)
         await asyncio.sleep(0.25)
-
         for pid in to_hobble:
-            try:
-                os.kill(pid, signal.SIGCONT)
-            except ProcessLookupError:
-                print(HOBBLED_PROCESS_DIED.format(pid))
+            _restart_process(pid)
         await asyncio.sleep(0.01)
 
 
 def main(cgroup_dir, tarpit_update_pause):
     print('Starting process hobbler', flush=True)
     loop = asyncio.get_event_loop()
+    queue = asyncio.queues.LifoQueue()
     loop.create_task(
-        update_processes_to_hobble(loop, cgroup_dir, tarpit_update_pause)
+        keep_polling_processes_to_hobble(cgroup_dir, queue, tarpit_update_pause)
     )
     loop.create_task(
-        hobble_processes_forever(loop)
+        hobble_processes_forever(queue)
     )
     loop.run_forever()
     loop.close()
