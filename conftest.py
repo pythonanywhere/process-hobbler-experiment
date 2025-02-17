@@ -11,7 +11,7 @@ import hobbler
 @pytest.fixture
 def fake_tarpit_dir():
     tempdir = tempfile.mkdtemp()
-    open(os.path.join(tempdir, 'tasks'), 'w').close()
+    open(os.path.join(tempdir, 'cgroup.procs'), 'w').close()
     yield tempdir
     shutil.rmtree(tempdir)
 
@@ -19,14 +19,14 @@ def fake_tarpit_dir():
 @pytest.fixture
 def fake_tarpit_pid(fake_tarpit_dir):
     def add_pid_to_fake_tarpit(pid):
-        with open(os.path.join(fake_tarpit_dir, 'tasks'), 'a') as f:
+        with open(os.path.join(fake_tarpit_dir, 'cgroup.procs'), 'a') as f:
             f.write(str(pid) + '\n')
     return add_pid_to_fake_tarpit
 
 
 @pytest.fixture
 def empty_fake_tarpit(fake_tarpit_dir):
-    return lambda: open(os.path.join(fake_tarpit_dir, 'tasks'), 'w').close()
+    return lambda: open(os.path.join(fake_tarpit_dir, 'cgroup.procs'), 'w').close()
 
 
 def _get_hobbler_process(fake_tarpit_dir, tmpdir, testing):

@@ -24,7 +24,7 @@ def test_tarpit_process_is_slow(fake_tarpit_dir, hobbler_process):
     print("normal", normal)
     slow = subprocess.check_output([
         'python', '-c',
-        "import os; open('{}/tasks', 'w').write(str(os.getpid())); ".format(fake_tarpit_dir) + timer
+        "import os; open('{}/cgroup.procs', 'w').write(str(os.getpid())); ".format(fake_tarpit_dir) + timer
     ], universal_newlines=True)
     slow = float(slow)
     print("slow", slow)

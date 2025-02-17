@@ -7,7 +7,7 @@ Usage:
   hobbler.py <cgroup_dir> [--testing]
 
 <cgroup_dir> is assumed to be a cgroup directory, but it can be any directory
-as long as it contains a file called "tasks" with a list of pids in it.
+as long as it contains a file called "cgroup.procs" with a list of pids in it.
 
 Options:
   -h --help             Show this screen.
@@ -25,7 +25,7 @@ HOBBLING_PIDS_MSG = 'hobbling pids: {}'
 
 async def get_all_pids(cgroup_dir):
     pids = set()
-    async with aiofiles.open(os.path.join(cgroup_dir, 'tasks')) as f:
+    async with aiofiles.open(os.path.join(cgroup_dir, 'cgroup.procs')) as f:
         async for line in f:
             try:
                 pids.add(int(line))
@@ -117,7 +117,7 @@ def main(cgroup_dir, test_mode):
 
 if __name__ == '__main__':
     args = docopt(__doc__)
-    cgroup = args['<cgroup_dir>']  # doesnt have to be a real cgroup, just needs to contain a file called "tasks" with a list of pids in it
-    assert os.path.exists(os.path.join(cgroup, 'tasks'))
+    cgroup = args['<cgroup_dir>']  # doesnt have to be a real cgroup, just needs to contain a file called "cgroup.procs" with a list of pids in it
+    assert os.path.exists(os.path.join(cgroup, 'cgroup.procs'))
     main(cgroup, args.get('--testing'))
 

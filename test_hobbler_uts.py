@@ -11,7 +11,7 @@ import hobbler
 @pytest.fixture
 def fake_tarpit_dir():
     tempdir = tempfile.mkdtemp()
-    open(os.path.join(tempdir, 'tasks'), 'w').close()
+    open(os.path.join(tempdir, 'cgroup.procs'), 'w').close()
     yield tempdir
     shutil.rmtree(tempdir)
 
